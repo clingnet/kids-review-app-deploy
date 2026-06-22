@@ -13,10 +13,21 @@ ROOT="$PWD"
 PORT="${PORT:-8000}"
 PIP_MIRROR="${PIP_MIRROR:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 
-# 1) venv（venv 自带 pip，无需系统 pip3）
+# 1) venv —— 兼容「Debian/Ubuntu 拆走 ensurepip」的机器（无 sudo）：
+#    先常规建；失败则 --without-pip 建壳，再用 get-pip.py 引导 pip。
 if [ ! -x "venv/bin/python" ]; then
   echo "[run-native] 创建 venv ..."
-  python3 -m venv venv
+  if ! python3 -m venv venv 2>/dev/null; then
+    echo "[run-native] 常规 venv 失败(缺 ensurepip)，改用 --without-pip + get-pip 引导 ..."
+    rm -rf venv
+    python3 -m venv --without-pip venv
+  fi
+fi
+# 确保 venv 里有 pip（没有就用 get-pip 引导）
+if ! ./venv/bin/python -m pip --version >/dev/null 2>&1; then
+  echo "[run-native] 引导 pip（get-pip.py）..."
+  curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+  ./venv/bin/python /tmp/get-pip.py -i "$PIP_MIRROR"
 fi
 echo "[run-native] 安装依赖（镜像：$PIP_MIRROR）..."
 ./venv/bin/python -m pip install -q --upgrade pip -i "$PIP_MIRROR" || true
