@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 老师 — 期末复习指挥舱</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0e1a;
+    --cyan:      #2de2e6;
+    --purple:    #a855f7;
+    --magenta:   #ff2d78;
+    --glass-bg:  rgba(10,20,50,.58);
+    --glass-border: rgba(45,226,230,.22);
+    --text:      #c8e6f8;
+    --text-dim:  #5a7fa0;
+    --radius:    16px;
+  }
+
+  html, body {
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: 'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    overflow: hidden;
+  }
+
+  /* scanline */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 1000; pointer-events: none;
+    background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,.07) 3px, rgba(0,0,0,.07) 4px);
+    animation: scanMove 6s linear infinite; opacity: .4;
+  }
+  @keyframes scanMove { from{background-position:0 0;} to{background-position:0 80px;} }
+
+  #app { position: relative; z-index: 2; height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── NAV ── */
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 28px; background: rgba(10,14,26,.90); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--glass-border); flex-shrink: 0; z-index: 100;
+  }
+  .nav-brand { font-size: 1.1rem; font-weight: 700; letter-spacing: .08em;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--magenta));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    filter: drop-shadow(0 0 6px rgba(45,226,230,.5)); }
+  .nav-links { display: flex; gap: 5px; }
+  .nav-links a { color: var(--text-dim); text-decoration: none; padding: 5px 16px;
+    border-radius: 20px; font-size: .84rem; border: 1px solid transparent; transition: all .25s; }
+  .nav-links a:hover, .nav-links a.active { color: var(--cyan); border-color: var(--cyan);
+    background: rgba(45,226,230,.08); box-shadow: 0 0 10px rgba(45,226,230,.25); }
+  .nav-right { display: flex; align-items: center; gap: 10px; font-size: .78rem; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan);
+    animation: dotPulse 2s ease-in-out infinite; box-shadow: 0 0 8px var(--cyan); }
+  @keyframes dotPulse { 0%,100%{opacity:.4;transform:scale(.8);} 50%{opacity:1;transform:scale(1.2);} }
+  .status-lbl { color: var(--text-dim); }
+  .status-lbl span { color: var(--cyan); }
+
+  /* ── 子 TAB ── */
+  .sub-tabs {
+    display: flex; flex-shrink: 0;
+    background: rgba(10,14,26,.75); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .sub-tab {
+    padding: 12px 28px; font-size: .88rem; cursor: pointer; font-family: inherit;
+    background: transparent; border: none; color: var(--text-dim);
+    border-bottom: 2px solid transparent; transition: all .2s; letter-spacing: .04em;
+  }
+  .sub-tab:hover { color: var(--text); }
+  .sub-tab.active { color: var(--cyan); border-bottom-color: var(--cyan);
+    background: rgba(45,226,230,.05); }
+
+  /* ── 内容区包装 ── */
+  #tab-content { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+  /* ══════════════════════════════════
+     TAB A: 问答辅导
+  ══════════════════════════════════ */
+  #tab-qa { display: flex; flex-direction: column; height: 100%; }
+
+  /* 上下文提示条 */
+  #ctx-bar {
+    flex-shrink: 0; padding: 8px 24px;
+    background: rgba(168,85,247,.07); border-bottom: 1px solid rgba(168,85,247,.2);
+    display: flex; align-items: center; gap: 12px; font-size: .8rem;
+  }
+  #ctx-bar.hidden { display: none; }
+  .ctx-tag {
+    padding: 3px 10px; border-radius: 10px; font-size: .75rem;
+    border: 1px solid rgba(168,85,247,.4); color: var(--purple); background: rgba(168,85,247,.1);
+  }
+  .ctx-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: .85rem; transition: color .2s; }
+  .ctx-close:hover { color: var(--magenta); }
+
+  /* 聊天区 */
+  #chat-area {
+    flex: 1; overflow-y: auto; padding: 22px 0; display: flex; flex-direction: column; gap: 16px;
+    scroll-behavior: smooth;
+  }
+  #chat-area::-webkit-scrollbar { width: 3px; }
+  #chat-area::-webkit-scrollbar-thumb { background: rgba(45,226,230,.18); border-radius: 2px; }
+
+  .msg-row { display: flex; gap: 11px; padding: 0 24px; animation: msgIn .3s ease-out both; }
+  @keyframes msgIn { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+  .msg-row.teacher { align-items: flex-start; }
+  .msg-row.student { align-items: flex-end; flex-direction: row-reverse; }
+
+  .avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 700; }
+  .avatar.ai-av  { background: linear-gradient(135deg,var(--cyan),var(--purple)); box-shadow: 0 0 12px rgba(45,226,230,.4); color: #0a0e1a; }
+  .avatar.stu-av { background: linear-gradient(135deg,var(--purple),var(--magenta)); box-shadow: 0 0 12px rgba(168,85,247,.4); color:#fff; }
+
+  .bubble { max-width: 66%; padding: 13px 17px; border-radius: 14px; font-size: .88rem; line-height: 1.7; position: relative; }
+  .bubble.t-bub { background: rgba(45,226,230,.06); border: 1px solid rgba(45,226,230,.18); color: #d0eeff; border-top-left-radius: 4px; box-shadow: 0 0 14px rgba(45,226,230,.06); }
+  .bubble.s-bub { background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.28); color: #e0d0ff; border-top-right-radius: 4px; }
+  .bubble-meta { font-size: .68rem; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 5px; }
+
+  .thinking-bubble { display: flex; align-items: center; gap: 5px; padding: 11px 17px;
+    background: rgba(45,226,230,.05); border: 1px solid rgba(45,226,230,.14);
+    border-radius: 14px; border-top-left-radius: 4px; max-width: 90px; }
+  .think-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); opacity:.3;
+    animation: thinkBounce 1.2s ease-in-out infinite; }
+  .think-dot:nth-child(2){animation-delay:.2s;} .think-dot:nth-child(3){animation-delay:.4s;}
+  @keyframes thinkBounce { 0%,100%{opacity:.2;transform:translateY(0);} 50%{opacity:1;transform:translateY(-5px);} }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .7rem; margin: 3px 3px 0 0; border: 1px solid; }
+  .tag-cyan    { border-color: rgba(45,226,230,.4); color: var(--cyan); background: rgba(45,226,230,.07); }
+  .tag-purple  { border-color: rgba(168,85,247,.4); color: var(--purple); background: rgba(168,85,247,.07); }
+  .tag-magenta { border-color: rgba(255,45,120,.4); color: var(--magenta); background: rgba(255,45,120,.07); }
+
+  .chat-divider { text-align: center; font-size: .7rem; color: var(--text-dim); letter-spacing: .1em;
+    display: flex; align-items: center; gap: 10px; padding: 0 24px; }
+  .chat-divider::before, .chat-divider::after { content:''; flex:1; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(45,226,230,.14), transparent); }
+
+  /* 输入区 */
+  #input-bar { flex-shrink: 0; padding: 14px 22px 18px;
+    background: rgba(10,14,26,.93); backdrop-filter: blur(18px);
+    border-top: 1px solid rgba(45,226,230,.14); }
+  .input-row { display: flex; align-items: flex-end; gap: 9px; }
+  .attach-btn { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
+    border: 1px solid var(--glass-border); background: rgba(45,226,230,.05);
+    color: var(--text-dim); display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; cursor: pointer; transition: all .2s; }
+  .attach-btn:hover { border-color: var(--cyan); color: var(--cyan); background: rgba(45,226,230,.1); box-shadow: 0 0 8px rgba(45,226,230,.2); }
+  .input-wrap { flex: 1; background: rgba(15,25,55,.7); border: 1px solid rgba(45,226,230,.2);
+    border-radius: 13px; display: flex; align-items: flex-end; gap: 8px; padding: 9px 13px; transition: border-color .2s, box-shadow .2s; }
+  .input-wrap:focus-within { border-color: rgba(45,226,230,.5); box-shadow: 0 0 14px rgba(45,226,230,.1); }
+  #chat-input { flex: 1; background: none; border: none; outline: none; color: var(--text);
+    font-size: .88rem; font-family: inherit; resize: none; max-height: 110px; line-height: 1.5;
+    min-height: 22px; caret-color: var(--cyan); }
+  #chat-input::placeholder { color: var(--text-dim); }
+  .send-btn { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    background: linear-gradient(135deg,var(--cyan),var(--purple)); border: none;
+    color: #0a0e1a; display: flex; align-items: center; justify-content: center;
+    font-size: .95rem; cursor: pointer; box-shadow: 0 0 10px rgba(45,226,230,.4); transition: transform .15s, box-shadow .15s; }
+  .send-btn:hover { transform: scale(1.1); box-shadow: 0 0 18px rgba(45,226,230,.6); }
+  .quick-row { display: flex; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
+  .quick-btn { padding: 4px 13px; border-radius: 20px; border: 1px solid rgba(45,226,230,.18);
+    background: rgba(45,226,230,.04); color: var(--text-dim); font-size: .76rem; cursor: pointer;
+    transition: all .2s; font-family: inherit; }
+  .quick-btn:hover { border-color: rgba(45,226,230,.45); color: var(--cyan); background: rgba(45,226,230,.09); box-shadow: 0 0 7px rgba(45,226,230,.18); }
+
+  /* ══════════════════════════════════
+     TAB B: 出模拟卷
+  ══════════════════════════════════ */
+  #tab-exam { display: none; flex-direction: column; overflow-y: auto; flex: 1; }
+  #tab-exam::-webkit-scrollbar { width: 4px; }
+  #tab-exam::-webkit-scrollbar-thumb { background: rgba(45,226,230,.2); }
+  #tab-exam.active { display: flex; }
+
+  .exam-main { padding: 24px 28px 48px; max-width: 1060px; margin: 0 auto; width: 100%; }
+
+  .exam-page-title { text-align: center; margin-bottom: 26px; }
+  .exam-page-title h1 { font-size: 2rem; font-weight: 900; letter-spacing: .06em;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--magenta));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    filter: drop-shadow(0 0 16px rgba(168,85,247,.5)); animation: titleGlow 3s ease-in-out infinite alternate; }
+  @keyframes titleGlow { 0%{filter:drop-shadow(0 0 12px rgba(45,226,230,.5));} 100%{filter:drop-shadow(0 0 24px rgba(168,85,247,.7));} }
+  .exam-page-sub { font-size: .82rem; color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase; margin-top: 5px; }
+
+  /* 三来源面板 */
+  .source-panels { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 18px; }
+  @media(max-width:900px){ .source-panels{grid-template-columns:1fr;} }
+
+  .glass-card { background: var(--glass-bg); backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border); border-radius: var(--radius); overflow: hidden; }
+  .panel-cyan    { border-color: rgba(45,226,230,.3); }
+  .panel-cyan:hover    { box-shadow: 0 0 28px rgba(45,226,230,.18); border-color: rgba(45,226,230,.5); }
+  .panel-magenta { border-color: rgba(255,45,120,.3); }
+  .panel-magenta:hover { box-shadow: 0 0 28px rgba(255,45,120,.18); border-color: rgba(255,45,120,.5); }
+  .panel-purple  { border-color: rgba(168,85,247,.3); }
+  .panel-purple:hover  { box-shadow: 0 0 28px rgba(168,85,247,.18); border-color: rgba(168,85,247,.5); }
+
+  .panel-header { display: flex; align-items: center; justify-content: space-between;
+    padding: .9rem 1.1rem; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .panel-title { font-size: .9rem; font-weight: 700; letter-spacing: .04em; }
+  .panel-cyan   .panel-title { color: var(--cyan); text-shadow: 0 0 8px rgba(45,226,230,.5); }
+  .panel-magenta .panel-title { color: var(--magenta); text-shadow: 0 0 8px rgba(255,45,120,.5); }
+  .panel-purple  .panel-title { color: var(--purple); text-shadow: 0 0 8px rgba(168,85,247,.5); }
+
+  .toggle-group { display: flex; align-items: center; gap: 6px; font-size: .72rem; color: var(--text-dim); }
+  .toggle-switch { position: relative; width: 44px; height: 20px; cursor: pointer; }
+  .toggle-switch input { display: none; }
+  .toggle-track { position: absolute; inset: 0; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); transition: background .3s, box-shadow .3s; }
+  .toggle-thumb { position: absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#94a3b8; transition:transform .3s cubic-bezier(.34,1.56,.64,1),background .3s,box-shadow .3s; }
+  .toggle-cyan input:checked~.toggle-track   { background:rgba(45,226,230,.2);  border-color:rgba(45,226,230,.5);  box-shadow:0 0 10px rgba(45,226,230,.4); }
+  .toggle-cyan input:checked~.toggle-thumb   { transform:translateX(24px); background:var(--cyan);    box-shadow:0 0 7px var(--cyan); }
+  .toggle-magenta input:checked~.toggle-track { background:rgba(255,45,120,.2); border-color:rgba(255,45,120,.5); box-shadow:0 0 10px rgba(255,45,120,.4); }
+  .toggle-magenta input:checked~.toggle-thumb { transform:translateX(24px); background:var(--magenta); box-shadow:0 0 7px var(--magenta); }
+  .toggle-purple input:checked~.toggle-track  { background:rgba(168,85,247,.2); border-color:rgba(168,85,247,.5); box-shadow:0 0 10px rgba(168,85,247,.4); }
+  .toggle-purple input:checked~.toggle-thumb  { transform:translateX(24px); background:var(--purple);  box-shadow:0 0 7px var(--purple); }
+
+  .panel-body { padding: 1rem 1.1rem; min-height: 140px; }
+  .auto-desc { color: #94a3b8; font-size: .82rem; line-height: 1.6; margin-bottom: .8rem; }
+  .ai-indicator { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .75rem;
+    border-radius: 999px; font-size: .72rem; font-weight: 700; letter-spacing: .07em;
+    animation: pulseGlow 2s ease-in-out infinite; }
+  .ai-indicator-cyan    { background:rgba(45,226,230,.1);  border:1px solid rgba(45,226,230,.4);  color:var(--cyan); }
+  .ai-indicator-magenta { background:rgba(255,45,120,.1);  border:1px solid rgba(255,45,120,.4);  color:var(--magenta); }
+  .ai-indicator-purple  { background:rgba(168,85,247,.1);  border:1px solid rgba(168,85,247,.4);  color:var(--purple); }
+  @keyframes pulseGlow { 0%,100%{opacity:1;} 50%{opacity:.7;} }
+  .pulse-dot { width:7px; height:7px; border-radius:50%; animation:dotBlink 1.2s ease-in-out infinite; }
+  .dot-cyan{background:var(--cyan);} .dot-magenta{background:var(--magenta);} .dot-purple{background:var(--purple);}
+  @keyframes dotBlink { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(.6);} }
+
+  .chips-grid { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .chip-item { display:inline-flex; align-items:center; gap:.3rem; padding:.28rem .7rem; border-radius:999px;
+    font-size:.76rem; cursor:pointer; border:1px solid; transition:all .2s; user-select:none; font-family:inherit; }
+  .chip-item input[type="checkbox"]{ display:none; }
+  .chip-item-cyan { border-color:rgba(45,226,230,.25); color:rgba(45,226,230,.65); background:rgba(45,226,230,.05); }
+  .chip-item-cyan:hover { border-color:rgba(45,226,230,.5); color:var(--cyan); background:rgba(45,226,230,.1); }
+  .chip-item-cyan.selected { border-color:var(--cyan); color:var(--cyan); background:rgba(45,226,230,.18); box-shadow:0 0 12px rgba(45,226,230,.35); }
+  .chip-item-magenta { border-color:rgba(255,45,120,.25); color:rgba(255,45,120,.65); background:rgba(255,45,120,.05); }
+  .chip-item-magenta:hover { border-color:rgba(255,45,120,.5); color:var(--magenta); background:rgba(255,45,120,.1); }
+  .chip-item-magenta.selected { border-color:var(--magenta); color:var(--magenta); background:rgba(255,45,120,.18); box-shadow:0 0 12px rgba(255,45,120,.35); }
+  .mastery-badge { font-size:.66rem; opacity:.8; font-weight:600; }
+  .m-high{color:#4ade80;} .m-mid{color:#fbbf24;} .m-low{color:#f87171;}
+  .off-state { display:flex; align-items:center; justify-content:center; height:100%; min-height:110px; flex-direction:column; gap:.45rem; }
+  .off-icon { font-size:2rem; opacity:.3; }
+  .off-text { color:var(--text-dim); font-size:.8rem; text-align:center; }
+  .ai-insights { margin-top:.7rem; padding:.7rem; background:rgba(168,85,247,.06); border-radius:8px; border:1px solid rgba(168,85,247,.15); }
+  .ai-insights p { font-size:.78rem; color:#c4b5fd; line-height:1.9; }
+
+  /* 配置行 */
+  .config-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+  @media(max-width:900px){ .config-row{grid-template-columns:1fr 1fr;} }
+  .config-card { padding:1rem 1.1rem; }
+  .config-label { font-size:.72rem; color:var(--text-dim); letter-spacing:.08em; text-transform:uppercase; margin-bottom:.7rem; font-weight:600; }
+  .qty-display { font-size:1.9rem; font-weight:900; color:var(--cyan); text-shadow:0 0 14px rgba(45,226,230,.5); line-height:1; margin-bottom:.45rem; }
+  .qty-unit { font-size:.85rem; color:var(--text-dim); }
+  input[type="range"] { width:100%; -webkit-appearance:none; height:4px; background:rgba(255,255,255,.1); border-radius:2px; outline:none; margin-top:.2rem; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:15px; height:15px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); cursor:pointer; }
+  .type-options { display:flex; flex-direction:column; gap:.4rem; }
+  .type-option { display:flex; align-items:center; gap:.45rem; cursor:pointer; font-size:.81rem; color:#94a3b8; transition:color .2s; }
+  .type-option:hover { color:var(--text); }
+  .type-option input[type="checkbox"]{ display:none; }
+  .custom-check { width:15px; height:15px; border-radius:4px; border:1.5px solid rgba(168,85,247,.4); background:rgba(168,85,247,.05); position:relative; flex-shrink:0; transition:all .2s; }
+  .type-option input:checked+.custom-check { background:rgba(168,85,247,.28); border-color:var(--purple); box-shadow:0 0 7px rgba(168,85,247,.4); }
+  .type-option input:checked+.custom-check::after { content:'✓'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--purple); font-weight:900; }
+  .diff-toggle { display:flex; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,.1); }
+  .diff-btn { flex:1; padding:.42rem 0; background:transparent; border:none; color:var(--text-dim);
+    font-size:.76rem; font-weight:600; cursor:pointer; transition:all .2s; font-family:inherit; }
+  .diff-btn:not(:last-child){ border-right:1px solid rgba(255,255,255,.1); }
+  .diff-btn.active-easy   { background:rgba(74,222,128,.15); color:#4ade80; }
+  .diff-btn.active-medium { background:rgba(251,191,36,.15); color:#fbbf24; }
+  .diff-btn.active-hard   { background:rgba(255,45,120,.15);  color:var(--magenta); }
+  .score-display { font-size:2.2rem; font-weight:900;
+    background:linear-gradient(135deg,var(--cyan),var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    filter:drop-shadow(0 0 8px rgba(168,85,247,.4)); line-height:1; }
+  .score-note { font-size:.72rem; color:var(--text-dim); margin-top:.35rem; }
+
+  /* 生成按钮 */
+  .generate-wrap { text-align:center; margin-bottom:22px; }
+  .btn-generate {
+    position:relative; display:inline-flex; align-items:center; gap:.65rem;
+    padding:.9rem 2.6rem; font-size:1.1rem; font-weight:900; letter-spacing:.1em;
+    color:#0a0e1a; background:linear-gradient(135deg,var(--cyan) 0%,var(--purple) 100%);
+    border:none; border-radius:999px; cursor:pointer; font-family:inherit;
+    box-shadow:0 0 22px rgba(45,226,230,.5),0 0 44px rgba(168,85,247,.3),0 4px 18px rgba(0,0,0,.4);
+    animation:btnPulse 2.5s ease-in-out infinite; transition:transform .15s,box-shadow .15s; overflow:hidden;
+  }
+  .btn-generate::before { content:''; position:absolute; inset:0; border-radius:inherit;
+    background:linear-gradient(135deg,rgba(255,255,255,.22) 0%,transparent 60%); }
+  .btn-generate:hover { transform:translateY(-2px) scale(1.03); animation:none;
+    box-shadow:0 0 34px rgba(45,226,230,.7),0 0 66px rgba(168,85,247,.5),0 8px 28px rgba(0,0,0,.5); }
+  .btn-generate:active { transform:scale(.97); }
+  @keyframes btnPulse { 0%,100%{box-shadow:0 0 22px rgba(45,226,230,.5),0 0 44px rgba(168,85,247,.3),0 4px 18px rgba(0,0,0,.4);}
+    50%{box-shadow:0 0 36px rgba(45,226,230,.8),0 0 72px rgba(168,85,247,.5),0 4px 18px rgba(0,0,0,.4);} }
+  .btn-generate.loading { animation:none; pointer-events:none; opacity:.8; }
+  .spinner-ring { display:none; width:20px; height:20px; border:2px solid rgba(10,14,26,.3); border-top-color:#0a0e1a; border-radius:50%; animation:spin .7s linear infinite; }
+  .btn-generate.loading .spinner-ring { display:block; }
+  .btn-generate.loading .btn-icon { display:none; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+
+  /* 卷子 */
+  #exam-result { opacity:0; transform:translateY(28px); transition:opacity .5s, transform .5s; pointer-events:none; }
+  #exam-result.revealed { opacity:1; transform:translateY(0); pointer-events:auto; }
+  .result-label { text-align:center; margin-bottom:1.1rem; }
+  .result-label span { font-size:.72rem; letter-spacing:.14em; color:var(--cyan); text-transform:uppercase;
+    padding:.28rem .9rem; border:1px solid rgba(45,226,230,.3); border-radius:999px; background:rgba(45,226,230,.05); }
+  .exam-paper { background:rgba(248,250,252,.96); backdrop-filter:blur(8px); border-radius:16px;
+    padding:2.2rem 2.6rem; color:#1e293b; position:relative; overflow:hidden;
+    box-shadow:0 0 36px rgba(45,226,230,.22),0 0 72px rgba(168,85,247,.1),0 8px 36px rgba(0,0,0,.4); }
+  .exam-paper::before { content:''; position:absolute; inset:0; border-radius:inherit; padding:2px;
+    background:linear-gradient(135deg,var(--cyan),var(--purple),var(--magenta));
+    -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); -webkit-mask-composite:destination-out; mask-composite:exclude; }
+  .exam-title { text-align:center; border-bottom:2px solid #e2e8f0; padding-bottom:1.1rem; margin-bottom:1.3rem; }
+  .exam-title h2 { font-size:1.35rem; font-weight:900; color:#0f172a; letter-spacing:.1em; margin-bottom:.35rem; }
+  .exam-meta { display:flex; justify-content:center; gap:2rem; font-size:.8rem; color:#64748b; flex-wrap:wrap; }
+  .exam-meta span { display:flex; align-items:center; gap:.25rem; }
+  .exam-section { margin-bottom:1.6rem; }
+  .esec-title { font-size:.95rem; font-weight:800; color:#1e293b; border-left:4px solid; padding-left:.65rem; margin-bottom:.9rem; letter-spacing:.04em; }
+  .s1 .esec-title{border-color:#2563eb;} .s2 .esec-title{border-color:#7c3aed;} .s3 .esec-title{border-color:#059669;} .s4 .esec-title{border-color:#dc2626;}
+  .question { margin-bottom:.9rem; }
+  .question p { font-size:.87rem; color:#374151; line-height:1.7; margin-bottom:.35rem; }
+  .question-num { font-weight:700; color:#374151; }
+  .options { display:grid; grid-template-columns:1fr 1fr; gap:.28rem .9rem; margin-top:.35rem; padding-left:.4rem; }
+  .options span { font-size:.84rem; color:#374151; }
+  .blank-line { display:inline-block; width:76px; border-bottom:1.5px solid #94a3b8; margin:0 .18rem; vertical-align:bottom; }
+  .calc-space { margin-top:.55rem; padding:.55rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px;
+    font-size:.8rem; color:#94a3b8; min-height:44px; display:flex; align-items:flex-start; }
+  .exam-actions { display:flex; gap:.9rem; justify-content:center; margin-top:1.5rem; padding-top:1.1rem; border-top:1px solid #e2e8f0; }
+  .exam-btn { display:inline-flex; align-items:center; gap:.45rem; padding:.55rem 1.3rem;
+    border-radius:8px; font-size:.87rem; font-weight:700; cursor:pointer; font-family:inherit; transition:all .2s; border:1.5px solid; }
+  .exam-btn-pdf   { background:rgba(37,99,235,.07); border-color:#2563eb; color:#2563eb; }
+  .exam-btn-pdf:hover   { background:rgba(37,99,235,.14); box-shadow:0 0 14px rgba(37,99,235,.3); }
+  .exam-btn-print { background:rgba(5,150,105,.07); border-color:#059669; color:#059669; }
+  .exam-btn-print:hover { background:rgba(5,150,105,.14); box-shadow:0 0 14px rgba(5,150,105,.3); }
+
+  /* 答案显隐 */
+  .show-ans-btn { display:inline-flex; align-items:center; gap:.45rem; padding:.55rem 1.3rem;
+    border-radius:8px; font-size:.87rem; font-weight:700; cursor:pointer; font-family:inherit;
+    background:rgba(168,85,247,.1); border:1.5px solid rgba(168,85,247,.4); color:var(--purple); transition:all .2s; }
+  .show-ans-btn:hover { background:rgba(168,85,247,.2); box-shadow:0 0 14px rgba(168,85,247,.3); }
+  .answers-block { margin-top:1.2rem; padding:1rem 1.1rem; background:rgba(168,85,247,.06); border:1px solid rgba(168,85,247,.2); border-radius:10px; display:none; }
+  .answers-block.visible { display:block; animation:fadeIn .3s ease-out; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
+  .ans-row { font-size:.82rem; color:#c4b5fd; line-height:2; }
+
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── NAV ── -->
+  <nav>
+    <div class="nav-brand">🤖 期末复习指挥舱</div>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="graph.html">知识图谱</a>
+      <a href="teacher.html" class="active">AI 老师</a>
+    </div>
+    <div class="nav-right">
+      <div class="status-dot"></div>
+      <div class="status-lbl">AI 老师在线 · 学员 <span>林小宇</span></div>
+    </div>
+  </nav>
+
+  <!-- ── 子 Tab ── -->
+  <div class="sub-tabs">
+    <button class="sub-tab active" id="tab-qa-btn"   onclick="switchTab('qa')">💬 问答辅导</button>
+    <button class="sub-tab"        id="tab-exam-btn" onclick="switchTab('exam')">📝 出模拟卷</button>
+  </div>
+
+  <div id="tab-content">
+
+    <!-- ═══════════════════════════════
+         TAB A: 问答辅导
+    ═══════════════════════════════ -->
+    <div id="tab-qa">
+
+      <!-- 知识点上下文条 -->
+      <div id="ctx-bar" class="hidden">
+        <span style="font-size:.78rem;color:var(--text-dim);">当前辅导知识点：</span>
+        <span class="ctx-tag" id="ctx-tag-label"></span>
+        <button class="ctx-close" onclick="clearCtx()">✕ 清除上下文</button>
+      </div>
+
+      <!-- 聊天区 -->
+      <div id="chat-area">
+
+        <div class="chat-divider">今天 · AI 老师辅导开始</div>
+
+        <div class="msg-row teacher">
+          <div class="avatar ai-av">AI</div>
+          <div>
+            <div class="bubble t-bub">
+              你好，林小宇同学！我是你的 AI 老师 ⚡<br>
+              根据你最新的知识图谱分析，<strong style="color:var(--magenta)">分数乘除法（30%）</strong>和<strong style="color:var(--magenta)">方程与未知数（44%）</strong>是当前最需要突破的知识点。<br><br>
+              今天我们可以选择：<br>
+              ① 专攻某个知识点 · ② 做几道练习看一看 · ③ 从知识图谱带着问题来找我
+              <div style="margin-top:10px;">
+                <span class="tag tag-magenta">薄弱：分数乘除法 30%</span>
+                <span class="tag tag-magenta">薄弱：方程未知数 44%</span>
+                <span class="tag tag-cyan">强项：英语词汇 85%</span>
+              </div>
+            </div>
+            <div class="bubble-meta">AI 老师 · 今天</div>
+          </div>
+        </div>
+
+        <div class="msg-row student">
+          <div class="avatar stu-av">宇</div>
+          <div>
+            <div class="bubble s-bub">老师，分数除法我总是搞混！除以一个分数到底怎么算？</div>
+            <div class="bubble-meta" style="justify-content:flex-end;">林小宇 · 今天</div>
+          </div>
+        </div>
+
+        <div class="msg-row teacher">
+          <div class="avatar ai-av">AI</div>
+          <div>
+            <div class="bubble t-bub">
+              记住一个核心口诀：<br><br>
+              <strong style="color:var(--cyan);font-size:1rem;">「除以一个数 = 乘以它的倒数」</strong><br><br>
+              举例：<strong>3/4 ÷ 2/5</strong><br>
+              第一步：除号变乘号，除数取倒数 → <strong>3/4 × 5/2</strong><br>
+              第二步：分子×分子，分母×分母 → <strong>15/8</strong><br>
+              第三步：化成带分数 → <strong>1 又 7/8</strong><br><br>
+              <strong style="color:var(--purple)">现在你来试：2/3 ÷ 4/9 = ？</strong>
+            </div>
+            <div class="bubble-meta">AI 老师</div>
+          </div>
+        </div>
+
+        <div class="msg-row student">
+          <div class="avatar stu-av">宇</div>
+          <div>
+            <div class="bubble s-bub">2/3 ÷ 4/9 = 2/3 × 9/4 = 18/12 = 3/2 = 1 又 1/2？</div>
+            <div class="bubble-meta" style="justify-content:flex-end;">林小宇</div>
+          </div>
+        </div>
+
+        <div class="msg-row teacher">
+          <div class="avatar ai-av">AI</div>
+          <div>
+            <div class="bubble t-bub">
+              🎉 完全正确，而且你还做了约分！<br><br>
+              <strong style="color:var(--cyan)">进阶技巧：</strong>分子分母可以交叉约分，先做再计算更简便。<br>
+              2/3 × 9/4 → 2和4先÷2 → 1/3 × 9/2 → 3和9先÷3 → 1/1 × 3/2 = <strong>3/2</strong>
+              <div style="margin-top:9px;">
+                <span class="tag tag-cyan">✓ 掌握度 +5%</span>
+              </div>
+            </div>
+            <div class="bubble-meta">AI 老师</div>
+          </div>
+        </div>
+
+        <div class="msg-row teacher" id="thinking-row">
+          <div class="avatar ai-av">AI</div>
+          <div class="thinking-bubble">
+            <div class="think-dot"></div><div class="think-dot"></div><div class="think-dot"></div>
+          </div>
+        </div>
+
+      </div><!-- /#chat-area -->
+
+      <!-- 输入区 -->
+      <div id="input-bar">
+        <div class="input-row">
+          <button class="attach-btn" title="拍照上传题目">📷</button>
+          <button class="attach-btn" title="语音输入">🎤</button>
+          <div class="input-wrap">
+            <textarea id="chat-input" rows="1"
+              placeholder="输入问题，或把不会的题目发给 AI 老师…"
+              oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+            <button class="send-btn" onclick="sendMsg()" title="发送">➤</button>
+          </div>
+        </div>
+        <div class="quick-row">
+          <button class="quick-btn" onclick="fillInput('再给我解释一遍，我没明白')">再解释一次</button>
+          <button class="quick-btn" onclick="fillInput('给我出一道类似的练习题')">再出一道练习</button>
+          <button class="quick-btn" onclick="fillInput('帮我总结今天学的知识点')">总结知识点</button>
+          <button class="quick-btn" onclick="fillInput('我想去看知识图谱')">查知识图谱</button>
+          <button class="quick-btn" onclick="fillInput('帮我出一份模拟卷')">出模拟卷</button>
+        </div>
+      </div>
+
+    </div><!-- /#tab-qa -->
+
+    <!-- ═══════════════════════════════
+         TAB B: 出模拟卷
+    ═══════════════════════════════ -->
+    <div id="tab-exam">
+      <div class="exam-main">
+
+        <div class="exam-page-title">
+          <h1>⚡ 智能模拟卷生成器</h1>
+          <p class="exam-page-sub">AI · 多源融合 · 精准命题 · 实时生成</p>
+        </div>
+
+        <!-- 三来源面板 -->
+        <div class="source-panels">
+
+          <!-- A: 知识图谱 -->
+          <div class="glass-card panel-cyan">
+            <div class="panel-header">
+              <div class="panel-title">🌐 基于知识图谱选考点</div>
+              <div class="toggle-group">
+                <span>自动</span>
+                <label class="toggle-switch toggle-cyan">
+                  <input type="checkbox" id="toggle-a" onchange="switchPanel('a',this.checked)">
+                  <div class="toggle-track"></div><div class="toggle-thumb"></div>
+                </label>
+                <span style="color:var(--cyan)">手动</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="auto-a">
+                <p class="auto-desc">系统根据知识图谱掌握度，智能抽取薄弱知识点，优先覆盖低掌握度节点。</p>
+                <div class="ai-indicator ai-indicator-cyan"><div class="pulse-dot dot-cyan"></div>AI 运算中</div>
+              </div>
+              <div class="hidden" id="manual-a">
+                <div class="chips-grid">
+                  <label class="chip-item chip-item-cyan" onclick="toggleChip(this)"><input type="checkbox">分数加减法<span class="mastery-badge m-mid">(62%)</span></label>
+                  <label class="chip-item chip-item-cyan selected" onclick="toggleChip(this)"><input type="checkbox" checked>分数乘除法<span class="mastery-badge m-low">(38%)</span></label>
+                  <label class="chip-item chip-item-cyan" onclick="toggleChip(this)"><input type="checkbox">小数运算<span class="mastery-badge m-high">(85%)</span></label>
+                  <label class="chip-item chip-item-cyan selected" onclick="toggleChip(this)"><input type="checkbox" checked>方程与未知数<span class="mastery-badge m-low">(44%)</span></label>
+                  <label class="chip-item chip-item-cyan" onclick="toggleChip(this)"><input type="checkbox">面积与周长<span class="mastery-badge m-high">(78%)</span></label>
+                  <label class="chip-item chip-item-cyan selected" onclick="toggleChip(this)"><input type="checkbox" checked>时间与速度<span class="mastery-badge m-low">(41%)</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- B: 错题 -->
+          <div class="glass-card panel-magenta">
+            <div class="panel-header">
+              <div class="panel-title">❌ 基于错题选考点</div>
+              <div class="toggle-group">
+                <span>自动</span>
+                <label class="toggle-switch toggle-magenta">
+                  <input type="checkbox" id="toggle-b" onchange="switchPanel('b',this.checked)">
+                  <div class="toggle-track"></div><div class="toggle-thumb"></div>
+                </label>
+                <span style="color:var(--magenta)">手动</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="auto-b">
+                <p class="auto-desc">系统从错题库中智能筛选高频错误知识点，优先覆盖反复出错的题型。</p>
+                <div class="ai-indicator ai-indicator-magenta"><div class="pulse-dot dot-magenta"></div>AI 运算中</div>
+              </div>
+              <div class="hidden" id="manual-b">
+                <div class="chips-grid">
+                  <label class="chip-item chip-item-magenta selected" onclick="toggleChip(this)"><input type="checkbox" checked>分数计算<span class="mastery-badge">(8题)</span></label>
+                  <label class="chip-item chip-item-magenta selected" onclick="toggleChip(this)"><input type="checkbox" checked>方程求解<span class="mastery-badge">(5题)</span></label>
+                  <label class="chip-item chip-item-magenta selected" onclick="toggleChip(this)"><input type="checkbox" checked>小数除法<span class="mastery-badge">(6题)</span></label>
+                  <label class="chip-item chip-item-magenta" onclick="toggleChip(this)"><input type="checkbox">科学实验<span class="mastery-badge">(4题)</span></label>
+                  <label class="chip-item chip-item-magenta" onclick="toggleChip(this)"><input type="checkbox">古诗默写<span class="mastery-badge">(3题)</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- C: AI 分析 -->
+          <div class="glass-card panel-purple">
+            <div class="panel-header">
+              <div class="panel-title">🤖 基于 AI 整体分析</div>
+              <div class="toggle-group">
+                <span style="color:var(--text-dim)">关</span>
+                <label class="toggle-switch toggle-purple">
+                  <input type="checkbox" id="toggle-c" checked onchange="switchPanelC(this.checked)">
+                  <div class="toggle-track"></div><div class="toggle-thumb"></div>
+                </label>
+                <span id="lbl-on-c" style="color:var(--purple)">开</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="panel-c-on">
+                <p class="auto-desc">AI 基于对学生整体学习情况的深度分析，智能补充针对性题目，构建全面评估。</p>
+                <div class="ai-indicator ai-indicator-purple" style="margin-bottom:.65rem;"><div class="pulse-dot dot-purple"></div>AI 深度分析中</div>
+                <div class="ai-insights">
+                  <p>• 建议加强分数运算类题目覆盖</p>
+                  <p>• 时间题型错误率偏高，需重点考查</p>
+                  <p>• 英语词汇题需补充巩固训练</p>
+                </div>
+              </div>
+              <div class="off-state hidden" id="panel-c-off">
+                <div class="off-icon">🤖</div>
+                <p class="off-text">AI 分析已关闭<br>将仅使用上方两个来源</p>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /.source-panels -->
+
+        <!-- 配置行 -->
+        <div class="config-row">
+          <div class="glass-card config-card">
+            <div class="config-label">题目数量</div>
+            <div class="qty-display" id="qty-display">20<span class="qty-unit"> 题</span></div>
+            <input type="range" min="5" max="50" value="20"
+              oninput="document.getElementById('qty-display').innerHTML=this.value+'<span class=qty-unit> 题</span>'">
+          </div>
+          <div class="glass-card config-card">
+            <div class="config-label">题型配置</div>
+            <div class="type-options">
+              <label class="type-option"><input type="checkbox" checked onchange="updateScore()"><div class="custom-check"></div>选择题</label>
+              <label class="type-option"><input type="checkbox" checked onchange="updateScore()"><div class="custom-check"></div>填空题</label>
+              <label class="type-option"><input type="checkbox" checked onchange="updateScore()"><div class="custom-check"></div>计算题</label>
+              <label class="type-option"><input type="checkbox" checked onchange="updateScore()"><div class="custom-check"></div>解答题</label>
+            </div>
+          </div>
+          <div class="glass-card config-card">
+            <div class="config-label">难度设置</div>
+            <div class="diff-toggle" style="margin-top:.45rem;">
+              <button class="diff-btn" onclick="setDiff('easy',this)">简单</button>
+              <button class="diff-btn active-medium" onclick="setDiff('medium',this)">中等</button>
+              <button class="diff-btn" onclick="setDiff('hard',this)">困难</button>
+            </div>
+            <p style="font-size:.72rem;color:var(--text-dim);margin-top:.5rem;" id="diff-desc">平衡题型分布，适合期末综合复习</p>
+          </div>
+          <div class="glass-card config-card">
+            <div class="config-label">预计总分</div>
+            <div class="score-display" id="score-display">100<span style="font-size:.9rem;-webkit-text-fill-color:var(--text-dim)"> 分</span></div>
+            <p class="score-note" id="score-note">4种题型 · 满分配置</p>
+          </div>
+        </div>
+
+        <!-- 生成按钮 -->
+        <div class="generate-wrap">
+          <button class="btn-generate" id="btn-gen" onclick="generateExam()">
+            <div class="spinner-ring"></div>
+            <span class="btn-icon">⚡</span>
+            <span id="btn-text">生成模拟卷</span>
+          </button>
+        </div>
+
+        <!-- 卷子 -->
+        <div id="exam-result">
+          <div class="result-label"><span>▼ 模拟卷已生成 · AI 命题完成</span></div>
+
+          <div class="exam-paper">
+            <div class="exam-title">
+              <h2>六年级期末综合模拟卷</h2>
+              <div class="exam-meta">
+                <span>📅 日期：<u>__________</u></span>
+                <span>👤 姓名：<u>__________</u></span>
+                <span>📊 总分：<strong>100分</strong></span>
+                <span>⏱ 限时：<strong>90分钟</strong></span>
+              </div>
+            </div>
+
+            <!-- 第一部分 -->
+            <div class="exam-section s1">
+              <div class="esec-title">第一部分：选择题（每题5分，共20分）</div>
+              <div class="question">
+                <p><span class="question-num">1.</span> 计算 <strong>3/4 + 1/6</strong> 的结果是（　　）。</p>
+                <div class="options"><span>A. 4/10</span><span>B. 11/12</span><span>C. 5/8</span><span>D. 7/12</span></div>
+              </div>
+              <div class="question">
+                <p><span class="question-num">2.</span> 一辆汽车以 <strong>60千米/小时</strong> 行驶 <strong>2.5小时</strong>，共走了（　　）千米。</p>
+                <div class="options"><span>A. 120</span><span>B. 130</span><span>C. 150</span><span>D. 160</span></div>
+              </div>
+              <div class="question">
+                <p><span class="question-num">3.</span> 方程 <strong>2x − 7 = 15</strong> 的解是（　　）。</p>
+                <div class="options"><span>A. x = 4</span><span>B. x = 11</span><span>C. x = 8</span><span>D. x = 3.5</span></div>
+              </div>
+              <div class="question">
+                <p><span class="question-num">4.</span> <strong>3/4 ÷ 3/8</strong> = （　　）。</p>
+                <div class="options"><span>A. 9/32</span><span>B. 1/2</span><span>C. 2</span><span>D. 8/9</span></div>
+              </div>
+            </div>
+
+            <!-- 第二部分 -->
+            <div class="exam-section s2">
+              <div class="esec-title">第二部分：填空题（每题8分，共24分）</div>
+              <div class="question"><p><span class="question-num">5.</span> <strong>5/8 × 4/3</strong> = <span class="blank-line"></span>，化成最简分数是 <span class="blank-line"></span>。</p></div>
+              <div class="question"><p><span class="question-num">6.</span> 小明家到学校 <strong>1.2千米</strong>，步行速度 <strong>60米/分钟</strong>，需走 <span class="blank-line"></span> 分钟。</p></div>
+              <div class="question"><p><span class="question-num">7.</span> 数据 <strong>12、15、9、18、11</strong> 的平均数是 <span class="blank-line"></span>。</p></div>
+            </div>
+
+            <!-- 第三部分 -->
+            <div class="exam-section s3">
+              <div class="esec-title">第三部分：计算题（每题12分，共24分）</div>
+              <div class="question">
+                <p><span class="question-num">8.</span> 计算（写出步骤）：</p>
+                <p style="padding-left:1rem;font-weight:600;">（1）3/5 ÷ 9/10 + 7/8 × 4/7</p>
+                <div class="calc-space">答题区……</div>
+              </div>
+              <div class="question" style="margin-top:.65rem;">
+                <p><span class="question-num">9.</span> 解方程：<strong>3(2x − 4) = 5x + 8</strong></p>
+                <div class="calc-space">答题区……</div>
+              </div>
+            </div>
+
+            <!-- 第四部分 -->
+            <div class="exam-section s4">
+              <div class="esec-title">第四部分：解答题（每题16分，共32分）</div>
+              <div class="question">
+                <p><span class="question-num">10.</span> 某小学春游共 <strong>280名</strong>同学，男生人数是女生的 <strong>3/4</strong>，男女生各多少人？（列方程）</p>
+                <div class="calc-space" style="min-height:68px;">答题区……</div>
+              </div>
+              <div class="question" style="margin-top:.65rem;">
+                <p><span class="question-num">11.</span> 圆柱形水桶底面半径 <strong>20cm</strong>，高 <strong>30cm</strong>（π=3.14）。①求侧面积；②装满水多少升？</p>
+                <div class="calc-space" style="min-height:76px;">答题区……</div>
+              </div>
+            </div>
+
+            <div class="exam-actions">
+              <button class="show-ans-btn" onclick="toggleAnswers()">👁 显示 / 隐藏答案</button>
+              <button class="exam-btn exam-btn-pdf">📥 下载 PDF</button>
+              <button class="exam-btn exam-btn-print">🖨️ 打印试卷</button>
+            </div>
+
+            <!-- 答案区 -->
+            <div class="answers-block" id="answers-block">
+              <div class="ans-row"><strong style="color:var(--cyan)">参考答案：</strong></div>
+              <div class="ans-row">1. B（11/12）&nbsp;&nbsp; 2. C（150千米）&nbsp;&nbsp; 3. B（x=11）&nbsp;&nbsp; 4. C（2）</div>
+              <div class="ans-row">5. 20/24 = <strong>5/6</strong> &nbsp;&nbsp; 6. <strong>20分钟</strong> &nbsp;&nbsp; 7. <strong>13</strong></div>
+              <div class="ans-row">8①. 2/3 + 1/2 = <strong>7/6</strong>（示例）&nbsp;&nbsp; 9. <strong>x = 20</strong></div>
+              <div class="ans-row">10. 设女生 x 人，男生 3x/4，x + 3x/4 = 280 → <strong>女生160人，男生120人</strong></div>
+              <div class="ans-row">11①. 侧面积 = 2×3.14×20×30 = <strong>3768平方厘米</strong> &nbsp;&nbsp; ②体积 = 3.14×400×30 = <strong>37.68升</strong></div>
+            </div>
+
+          </div><!-- /.exam-paper -->
+        </div><!-- /#exam-result -->
+
+      </div><!-- /.exam-main -->
+    </div><!-- /#tab-exam -->
+
+  </div><!-- /#tab-content -->
+</div><!-- /#app -->
+
+<script>
+/* ─── tab 切换 ─── */
+function switchTab(t) {
+  const qa = document.getElementById('tab-qa');
+  const exam = document.getElementById('tab-exam');
+  const qaBtn = document.getElementById('tab-qa-btn');
+  const examBtn = document.getElementById('tab-exam-btn');
+  if (t === 'qa') {
+    qa.style.display='flex'; exam.style.display='none';
+    qaBtn.classList.add('active'); examBtn.classList.remove('active');
+    setTimeout(()=>{ const a=document.getElementById('chat-area'); a.scrollTop=a.scrollHeight; },50);
+  } else {
+    qa.style.display='none'; exam.style.display='flex';
+    qaBtn.classList.remove('active'); examBtn.classList.add('active');
+  }
+}
+
+/* ─── 知识点上下文 (从知识图谱跳过来) ─── */
+(function(){
+  const params=new URLSearchParams(window.location.search);
+  const topic=params.get('topic');
+  if(topic){
+    const bar=document.getElementById('ctx-bar');
+    document.getElementById('ctx-tag-label').textContent=topic;
+    bar.classList.remove('hidden');
+    // 插入 AI 提示消息
+    const area=document.getElementById('chat-area');
+    const row=document.createElement('div');
+    row.className='msg-row teacher';
+    row.innerHTML=`<div class="avatar ai-av">AI</div><div>
+      <div class="bubble t-bub">我看到你从知识图谱带来了 <strong style="color:var(--purple)">${escHtml(topic)}</strong> 这个知识点，我们来专项讲解一下！</div>
+      <div class="bubble-meta">AI 老师</div></div>`;
+    area.appendChild(row); area.scrollTop=area.scrollHeight;
+  }
+})();
+function clearCtx(){ document.getElementById('ctx-bar').classList.add('hidden'); }
+
+/* ─── 聊天逻辑 ─── */
+function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
+function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();} }
+function fillInput(text){ const el=document.getElementById('chat-input'); el.value=text; el.focus(); autoResize(el); }
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function sendMsg(){
+  const el=document.getElementById('chat-input');
+  const text=el.value.trim(); if(!text)return;
+  const area=document.getElementById('chat-area');
+  const now=new Date(), ts=`${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const sRow=document.createElement('div');
+  sRow.className='msg-row student';
+  sRow.innerHTML=`<div class="avatar stu-av">宇</div><div>
+    <div class="bubble s-bub">${escHtml(text)}</div>
+    <div class="bubble-meta" style="justify-content:flex-end;">林小宇 · ${ts}</div></div>`;
+  area.appendChild(sRow);
+  el.value=''; el.style.height='auto';
+  const tRow=document.createElement('div');
+  tRow.className='msg-row teacher';
+  tRow.innerHTML=`<div class="avatar ai-av">AI</div><div class="thinking-bubble"><div class="think-dot"></div><div class="think-dot"></div><div class="think-dot"></div></div>`;
+  area.appendChild(tRow); area.scrollTop=area.scrollHeight;
+  // 检测关键词，给出针对性回复
+  const lc=text.toLowerCase();
+  let reply='好的，这是演示原型中的模拟回复。真实接入 AI 后端后，会针对你的问题给出个性化讲解。<br>继续加油 💪';
+  if(lc.includes('模拟卷')||lc.includes('出卷')){ reply='好主意！点击上方「📝 出模拟卷」标签，就能配置并生成一份专属模拟卷。'; }
+  else if(lc.includes('知识图谱')){ reply='知识图谱在顶部导航 →「知识图谱」里。你可以点击节点查看掌握情况，也可以从节点直接跳回来问我。'; }
+  else if(lc.includes('总结')){ reply='今天学习要点：<br>① 分数除法 = 乘倒数<br>② 能约分先约分<br>③ 结果要化为最简分数或带分数<br><span class="tag tag-cyan">✓ 已记录本次学习</span>'; }
+  setTimeout(()=>{
+    tRow.remove();
+    const aRow=document.createElement('div');
+    aRow.className='msg-row teacher';
+    aRow.innerHTML=`<div class="avatar ai-av">AI</div><div>
+      <div class="bubble t-bub">${reply}</div>
+      <div class="bubble-meta">AI 老师 · ${ts}</div></div>`;
+    area.appendChild(aRow); area.scrollTop=area.scrollHeight;
+  },1400);
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  const a=document.getElementById('chat-area'); a.scrollTop=a.scrollHeight;
+  // 自动展示卷子
+  setTimeout(()=>document.getElementById('exam-result').classList.add('revealed'),600);
+});
+
+/* ─── 出卷逻辑 ─── */
+function switchPanel(id,isManual){
+  document.getElementById('auto-'+id).classList.toggle('hidden',isManual);
+  document.getElementById('manual-'+id).classList.toggle('hidden',!isManual);
+}
+function switchPanelC(isOn){
+  document.getElementById('panel-c-on').classList.toggle('hidden',!isOn);
+  document.getElementById('panel-c-off').classList.toggle('hidden',isOn);
+  document.getElementById('lbl-on-c').style.color=isOn?'var(--purple)':'var(--text-dim)';
+}
+function toggleChip(label){
+  const cb=label.querySelector('input[type="checkbox"]');
+  setTimeout(()=>{ label.classList.toggle('selected',cb.checked); },0);
+}
+const diffMap={ easy:'以基础题为主，适合知识巩固练习', medium:'平衡题型分布，适合期末综合复习', hard:'以提高题为主，适合竞赛冲刺训练' };
+function setDiff(level,btn){
+  document.querySelectorAll('.diff-btn').forEach(b=>b.className='diff-btn');
+  btn.classList.add('active-'+level);
+  document.getElementById('diff-desc').textContent=diffMap[level];
+}
+function updateScore(){
+  const n=Array.from(document.querySelectorAll('.type-options input[type="checkbox"]')).filter(c=>c.checked).length;
+  const scores=[0,60,80,90,100], notes=['','1种题型','2种题型','3种题型','4种题型 · 满分配置'];
+  document.getElementById('score-display').innerHTML=scores[n]+'<span style="font-size:.9rem;-webkit-text-fill-color:var(--text-dim)"> 分</span>';
+  document.getElementById('score-note').textContent=notes[n];
+}
+function generateExam(){
+  const btn=document.getElementById('btn-gen'), txt=document.getElementById('btn-text');
+  btn.classList.add('loading'); txt.textContent='生成中…';
+  setTimeout(()=>{
+    btn.classList.remove('loading'); txt.textContent='重新生成';
+    btn.querySelector('.btn-icon').style.display='';
+    const r=document.getElementById('exam-result'); r.classList.add('revealed');
+    r.scrollIntoView({behavior:'smooth',block:'start'});
+  },2200);
+}
+function toggleAnswers(){
+  document.getElementById('answers-block').classList.toggle('visible');
+}
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

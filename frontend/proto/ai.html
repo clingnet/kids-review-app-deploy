@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 老师 — 期末复习指挥舱</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0e1a;
+    --cyan:      #2de2e6;
+    --purple:    #a855f7;
+    --magenta:   #ff2d78;
+    --cyan-dim:  rgba(45,226,230,.15);
+    --purple-dim:rgba(168,85,247,.15);
+    --glass-bg:  rgba(10,20,50,.55);
+    --glass-border: rgba(45,226,230,.22);
+    --text:      #c8e6f8;
+    --text-dim:  #5a7fa0;
+    --radius:    16px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── 扫描线 ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 1000; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      rgba(0,0,0,.07) 3px, rgba(0,0,0,.07) 4px
+    );
+    animation: scanMove 6s linear infinite;
+    opacity: .4;
+  }
+  @keyframes scanMove {
+    from { background-position: 0 0; }
+    to   { background-position: 0 80px; }
+  }
+
+  /* ── 页面框架 ── */
+  #app {
+    position: relative; z-index: 2;
+    height: 100vh;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── 导航 ── */
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 32px;
+    background: rgba(10,14,26,.88);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--glass-border);
+    position: sticky; top: 0; z-index: 100;
+    flex-shrink: 0;
+  }
+  .nav-brand {
+    font-size: 1.2rem; font-weight: 700; letter-spacing: .08em;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--magenta));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 6px rgba(45,226,230,.5));
+  }
+  .nav-links { display: flex; gap: 6px; }
+  .nav-links a {
+    color: var(--text-dim); text-decoration: none;
+    padding: 6px 16px; border-radius: 20px; font-size: .85rem;
+    border: 1px solid transparent;
+    transition: all .25s;
+  }
+  .nav-links a:hover, .nav-links a.active {
+    color: var(--cyan);
+    border-color: var(--cyan);
+    background: rgba(45,226,230,.08);
+    box-shadow: 0 0 12px rgba(45,226,230,.3);
+  }
+  .nav-status {
+    display: flex; align-items: center; gap: 12px; font-size: .78rem;
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cyan);
+    animation: dotPulse 2s ease-in-out infinite;
+    box-shadow: 0 0 8px var(--cyan);
+  }
+  @keyframes dotPulse {
+    0%,100% { opacity: .5; transform: scale(.8); }
+    50%      { opacity: 1;  transform: scale(1.2); }
+  }
+  .status-label { color: var(--text-dim); font-size: .75rem; }
+  .status-label span { color: var(--cyan); }
+
+  /* ── 聊天区 ── */
+  #chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0;
+    display: flex; flex-direction: column; gap: 18px;
+    scroll-behavior: smooth;
+  }
+  #chat-area::-webkit-scrollbar { width: 4px; }
+  #chat-area::-webkit-scrollbar-track { background: transparent; }
+  #chat-area::-webkit-scrollbar-thumb { background: rgba(45,226,230,.2); border-radius: 2px; }
+
+  /* 消息行 */
+  .msg-row {
+    display: flex; gap: 12px; padding: 0 24px;
+    animation: msgIn .3s ease-out both;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .msg-row.teacher { align-items: flex-start; }
+  .msg-row.student { align-items: flex-end; flex-direction: row-reverse; }
+
+  /* 头像 */
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .9rem; font-weight: 700;
+  }
+  .avatar.ai-avatar {
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    box-shadow: 0 0 14px rgba(45,226,230,.4);
+    color: #0a0e1a;
+  }
+  .avatar.stu-avatar {
+    background: linear-gradient(135deg, var(--purple), var(--magenta));
+    box-shadow: 0 0 14px rgba(168,85,247,.4);
+    color: #fff;
+  }
+
+  /* 气泡 */
+  .bubble {
+    max-width: 68%;
+    padding: 14px 18px;
+    border-radius: 14px;
+    font-size: .9rem;
+    line-height: 1.7;
+    position: relative;
+  }
+  .bubble.teacher-bubble {
+    background: rgba(45,226,230,.06);
+    border: 1px solid rgba(45,226,230,.2);
+    color: #d0eeff;
+    border-top-left-radius: 4px;
+    box-shadow: 0 0 18px rgba(45,226,230,.08);
+  }
+  .bubble.student-bubble {
+    background: rgba(168,85,247,.1);
+    border: 1px solid rgba(168,85,247,.3);
+    color: #e0d0ff;
+    border-top-right-radius: 4px;
+    box-shadow: 0 0 14px rgba(168,85,247,.1);
+  }
+  .bubble-meta {
+    font-size: .7rem; color: var(--text-dim);
+    margin-top: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* AI 思考动画 */
+  .thinking-bubble {
+    display: flex; align-items: center; gap: 5px;
+    padding: 12px 18px;
+    background: rgba(45,226,230,.05);
+    border: 1px solid rgba(45,226,230,.15);
+    border-radius: 14px; border-top-left-radius: 4px;
+    max-width: 100px;
+  }
+  .think-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cyan); opacity: .3;
+    animation: thinkBounce 1.2s ease-in-out infinite;
+  }
+  .think-dot:nth-child(2) { animation-delay: .2s; }
+  .think-dot:nth-child(3) { animation-delay: .4s; }
+  @keyframes thinkBounce {
+    0%,100% { opacity: .2; transform: translateY(0); }
+    50%      { opacity: 1;  transform: translateY(-5px); }
+  }
+
+  /* 知识点标签 */
+  .tag {
+    display: inline-block;
+    padding: 2px 9px; border-radius: 10px; font-size: .7rem;
+    margin: 4px 3px 0 0;
+    border: 1px solid;
+  }
+  .tag-cyan    { border-color: rgba(45,226,230,.4); color: var(--cyan); background: rgba(45,226,230,.07); }
+  .tag-purple  { border-color: rgba(168,85,247,.4); color: var(--purple); background: rgba(168,85,247,.07); }
+  .tag-magenta { border-color: rgba(255,45,120,.4); color: var(--magenta); background: rgba(255,45,120,.07); }
+
+  /* 分隔符 */
+  .chat-divider {
+    text-align: center; font-size: .7rem; color: var(--text-dim);
+    letter-spacing: .1em; padding: 4px 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 24px;
+  }
+  .chat-divider::before, .chat-divider::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(45,226,230,.15), transparent);
+  }
+
+  /* ── 输入区 ── */
+  #input-bar {
+    flex-shrink: 0;
+    padding: 16px 24px 20px;
+    background: rgba(10,14,26,.92);
+    backdrop-filter: blur(18px);
+    border-top: 1px solid rgba(45,226,230,.15);
+  }
+
+  .input-row {
+    display: flex; align-items: flex-end; gap: 10px;
+  }
+
+  /* 附件按钮 */
+  .attach-btn {
+    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+    border: 1px solid var(--glass-border);
+    background: rgba(45,226,230,.06);
+    color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; cursor: pointer;
+    transition: all .2s;
+  }
+  .attach-btn:hover {
+    border-color: var(--cyan); color: var(--cyan);
+    background: rgba(45,226,230,.12);
+    box-shadow: 0 0 10px rgba(45,226,230,.25);
+  }
+
+  /* 文本框 */
+  .input-wrap {
+    flex: 1;
+    background: rgba(15,25,55,.7);
+    border: 1px solid rgba(45,226,230,.2);
+    border-radius: 14px;
+    display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .input-wrap:focus-within {
+    border-color: rgba(45,226,230,.5);
+    box-shadow: 0 0 16px rgba(45,226,230,.12);
+  }
+  #chat-input {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text); font-size: .9rem; font-family: inherit;
+    resize: none; max-height: 120px; line-height: 1.5;
+    min-height: 24px;
+    caret-color: var(--cyan);
+  }
+  #chat-input::placeholder { color: var(--text-dim); }
+
+  /* 发送按钮 */
+  .send-btn {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    border: none; color: #0a0e1a;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; cursor: pointer;
+    box-shadow: 0 0 12px rgba(45,226,230,.4);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .send-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 20px rgba(45,226,230,.6);
+  }
+  .send-btn:active { transform: scale(.95); }
+
+  /* 快捷提问 */
+  .quick-row {
+    display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;
+  }
+  .quick-btn {
+    padding: 5px 14px; border-radius: 20px;
+    border: 1px solid rgba(45,226,230,.2);
+    background: rgba(45,226,230,.04);
+    color: var(--text-dim); font-size: .78rem; cursor: pointer;
+    transition: all .2s; font-family: inherit;
+  }
+  .quick-btn:hover {
+    border-color: rgba(45,226,230,.5); color: var(--cyan);
+    background: rgba(45,226,230,.09);
+    box-shadow: 0 0 8px rgba(45,226,230,.2);
+  }
+
+  /* 响应式 */
+  @media (max-width: 600px) {
+    nav { padding: 12px 16px; }
+    .nav-status { display: none; }
+    #input-bar { padding: 12px 14px 16px; }
+    .bubble { max-width: 90%; }
+    .msg-row { padding: 0 12px; }
+    .chat-divider { padding: 0 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── 导航 ── -->
+  <nav>
+    <div class="nav-brand">🤖 期末复习指挥舱</div>
+    <div class="nav-links">
+      <a href="index.html">主页</a>
+      <a href="ai.html" class="active">AI 老师</a>
+    </div>
+    <div class="nav-status">
+      <div class="status-dot"></div>
+      <div class="status-label">AI 老师在线 · 学员 <span>林小宇</span></div>
+    </div>
+  </nav>
+
+  <!-- ── 聊天区 ── -->
+  <div id="chat-area">
+
+    <div class="chat-divider">今天 · 14:20 · 开始本次辅导</div>
+
+    <!-- AI 开场 -->
+    <div class="msg-row teacher">
+      <div class="avatar ai-avatar">AI</div>
+      <div>
+        <div class="bubble teacher-bubble">
+          你好，林小宇同学！我是你的 AI 老师 ⚡<br>
+          根据你最新的知识图谱分析，我发现你在<strong style="color:var(--magenta)">分数乘除法</strong>和<strong style="color:var(--magenta)">方程与未知数</strong>这两个知识点上还有一些薄弱环节。今天我们重点攻克这里，好不好？
+          <div style="margin-top:10px;">
+            <span class="tag tag-magenta">薄弱：分数乘除法 30%</span>
+            <span class="tag tag-magenta">薄弱：方程未知数 44%</span>
+            <span class="tag tag-cyan">强项：英语词汇 85%</span>
+          </div>
+        </div>
+        <div class="bubble-meta">AI 老师 · 14:20</div>
+      </div>
+    </div>
+
+    <!-- 学生回复 -->
+    <div class="msg-row student">
+      <div class="avatar stu-avatar">宇</div>
+      <div>
+        <div class="bubble student-bubble">
+          好的老师！分数乘除法我总是搞混，特别是除以一个分数的时候，感觉好难。
+        </div>
+        <div class="bubble-meta" style="justify-content:flex-end;">林小宇 · 14:21</div>
+      </div>
+    </div>
+
+    <!-- AI 解题 -->
+    <div class="msg-row teacher">
+      <div class="avatar ai-avatar">AI</div>
+      <div>
+        <div class="bubble teacher-bubble">
+          完全理解！很多同学都在这里容易出错。记住一个核心口诀：<br><br>
+          <strong style="color:var(--cyan);font-size:1rem;">「除以一个数 = 乘以它的倒数」</strong><br><br>
+          比如：<strong>3/4 ÷ 2/5</strong><br>
+          第一步：把除号变成乘号 → <strong>3/4 × 5/2</strong><br>
+          第二步：分子相乘、分母相乘 → <strong>(3×5)/(4×2) = 15/8</strong><br>
+          第三步：化成带分数 → <strong>1 又 7/8</strong><br><br>
+          现在你来试一道：<strong style="color:var(--purple)">2/3 ÷ 4/9 = ？</strong>
+        </div>
+        <div class="bubble-meta">AI 老师 · 14:22</div>
+      </div>
+    </div>
+
+    <!-- 学生尝试 -->
+    <div class="msg-row student">
+      <div class="avatar stu-avatar">宇</div>
+      <div>
+        <div class="bubble student-bubble">
+          我来试试……2/3 ÷ 4/9 = 2/3 × 9/4 = 18/12 = 3/2 = 1 又 1/2？
+        </div>
+        <div class="bubble-meta" style="justify-content:flex-end;">林小宇 · 14:24</div>
+      </div>
+    </div>
+
+    <!-- AI 批改 -->
+    <div class="msg-row teacher">
+      <div class="avatar ai-avatar">AI</div>
+      <div>
+        <div class="bubble teacher-bubble">
+          🎉 完全正确！你掌握得很好！<br><br>
+          而且你还做了化简（18/12 → 3/2 → 1½），这步很关键，期末考试一定要记得约分到最简！<br><br>
+          <strong style="color:var(--cyan)">小技巧：</strong>约分可以先做，分子分母交叉约分，这样计算更简便。<br>
+          比如上面的 2/3 × 9/4：把 2 和 4 先约掉 ÷2，变成 1/3 × 9/2；再把 3 和 9 约 ÷3，变成 1/1 × 3/2 = 3/2。
+          <div style="margin-top:10px;">
+            <span class="tag tag-cyan">✓ 知识点掌握度 +5%</span>
+          </div>
+        </div>
+        <div class="bubble-meta">AI 老师 · 14:24</div>
+      </div>
+    </div>
+
+    <!-- AI 追问 -->
+    <div class="msg-row teacher">
+      <div class="avatar ai-avatar">AI</div>
+      <div>
+        <div class="bubble teacher-bubble">
+          接下来我们做一道应用题：<br><br>
+          <strong style="color:var(--purple)">小华有一根绳子，长 5/6 米，他把它剪成若干段，每段长 5/18 米，能剪成几段？</strong>
+        </div>
+        <div class="bubble-meta">AI 老师 · 14:25</div>
+      </div>
+    </div>
+
+    <!-- 思考中占位（最后一条） -->
+    <div class="msg-row student">
+      <div class="avatar stu-avatar">宇</div>
+      <div>
+        <div class="bubble student-bubble">让我想想……</div>
+        <div class="bubble-meta" style="justify-content:flex-end;">林小宇 · 14:26</div>
+      </div>
+    </div>
+
+    <div class="msg-row teacher" id="thinking-row">
+      <div class="avatar ai-avatar">AI</div>
+      <div class="thinking-bubble">
+        <div class="think-dot"></div>
+        <div class="think-dot"></div>
+        <div class="think-dot"></div>
+      </div>
+    </div>
+
+  </div><!-- /#chat-area -->
+
+  <!-- ── 输入区 ── -->
+  <div id="input-bar">
+    <div class="input-row">
+      <!-- 拍照按钮 -->
+      <button class="attach-btn" title="拍照上传题目">📷</button>
+      <!-- 语音按钮 -->
+      <button class="attach-btn" title="语音输入">🎤</button>
+
+      <div class="input-wrap">
+        <textarea id="chat-input" rows="1"
+          placeholder="输入你的问题，或把不会的题目发给 AI 老师…"
+          oninput="autoResize(this)"
+          onkeydown="handleKey(event)"
+        ></textarea>
+        <button class="send-btn" onclick="sendMsg()" title="发送">➤</button>
+      </div>
+    </div>
+
+    <div class="quick-row">
+      <button class="quick-btn" onclick="fillInput('我不明白这道题，能再解释一次吗？')">再解释一次</button>
+      <button class="quick-btn" onclick="fillInput('给我出一道类似的练习题')">再出一道练习</button>
+      <button class="quick-btn" onclick="fillInput('帮我总结一下刚才学的知识点')">总结知识点</button>
+      <button class="quick-btn" onclick="fillInput('我要去看知识图谱')">查看知识图谱</button>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script>
+/* ── 自动高度 ── */
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+/* ── 回车发送 ── */
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMsg();
+  }
+}
+
+/* ── 快捷填入 ── */
+function fillInput(text) {
+  const el = document.getElementById('chat-input');
+  el.value = text;
+  el.focus();
+  autoResize(el);
+}
+
+/* ── 假发送（演示） ── */
+function sendMsg() {
+  const el   = document.getElementById('chat-input');
+  const text = el.value.trim();
+  if (!text) return;
+
+  const area = document.getElementById('chat-area');
+
+  // 插入学生气泡
+  const now = new Date();
+  const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const stuRow = document.createElement('div');
+  stuRow.className = 'msg-row student';
+  stuRow.innerHTML = `
+    <div class="avatar stu-avatar">宇</div>
+    <div>
+      <div class="bubble student-bubble">${escHtml(text)}</div>
+      <div class="bubble-meta" style="justify-content:flex-end;">林小宇 · ${timeStr}</div>
+    </div>`;
+  area.appendChild(stuRow);
+
+  el.value = '';
+  el.style.height = 'auto';
+
+  // AI 思考中
+  const thinkRow = document.createElement('div');
+  thinkRow.className = 'msg-row teacher';
+  thinkRow.innerHTML = `
+    <div class="avatar ai-avatar">AI</div>
+    <div class="thinking-bubble">
+      <div class="think-dot"></div>
+      <div class="think-dot"></div>
+      <div class="think-dot"></div>
+    </div>`;
+  area.appendChild(thinkRow);
+  area.scrollTop = area.scrollHeight;
+
+  // 模拟 AI 回复
+  setTimeout(() => {
+    thinkRow.remove();
+    const aiRow = document.createElement('div');
+    aiRow.className = 'msg-row teacher';
+    aiRow.innerHTML = `
+      <div class="avatar ai-avatar">AI</div>
+      <div>
+        <div class="bubble teacher-bubble">
+          好的！这是一个演示原型，真实的 AI 讲解功能接入后端后会自动生成针对性内容。<br>
+          你的问题已记录：<em style="color:var(--cyan)">"${escHtml(text)}"</em><br><br>
+          继续加油，你现在的掌握度已经在提升了！💪
+        </div>
+        <div class="bubble-meta">AI 老师 · ${timeStr}</div>
+      </div>`;
+    area.appendChild(aiRow);
+    area.scrollTop = area.scrollHeight;
+  }, 1400);
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+/* ── 初始滚到底 ── */
+window.addEventListener('DOMContentLoaded', () => {
+  const area = document.getElementById('chat-area');
+  area.scrollTop = area.scrollHeight;
+});
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

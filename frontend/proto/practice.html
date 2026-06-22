@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>自我练习 — 期末复习指挥舱</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0a0e1a;
+      --cyan:    #2de2e6;
+      --purple:  #a855f7;
+      --magenta: #ff2d78;
+      --glass-bg:     rgba(10,20,50,.58);
+      --glass-border: rgba(45,226,230,.22);
+      --text:    #c8e6f8;
+      --text-dim:#5a7fa0;
+      --radius:  16px;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text);
+      font-family: 'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; overflow-x: hidden; }
+
+    .scanlines { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,.07) 3px, rgba(0,0,0,.07) 4px);
+      animation: scanMove 6s linear infinite; opacity: .4; }
+    @keyframes scanMove { from { background-position: 0 0; } to { background-position: 0 80px; } }
+
+    #app { position: relative; z-index: 2; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── NAV ── */
+    nav { display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 32px; background: rgba(10,14,26,.88); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--glass-border); position: sticky; top: 0; z-index: 100; }
+    .nav-brand { font-size: 1.2rem; font-weight: 700; letter-spacing: .08em;
+      background: linear-gradient(90deg, var(--cyan), var(--purple), var(--magenta));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      filter: drop-shadow(0 0 6px rgba(45,226,230,.5)); text-decoration: none; }
+    .nav-links { display: flex; gap: 6px; }
+    .nav-links a { color: var(--text-dim); text-decoration: none; padding: 6px 18px;
+      border-radius: 20px; font-size: .85rem; border: 1px solid transparent; transition: all .25s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--cyan); border-color: var(--cyan);
+      background: rgba(45,226,230,.08); box-shadow: 0 0 12px rgba(45,226,230,.3); }
+    .nav-back { color: var(--text-dim); font-size: .78rem; display: flex; align-items: center; gap: 6px; }
+
+    main { flex: 1; padding: 28px 32px 56px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+    .section-title { font-size: .7rem; text-transform: uppercase; letter-spacing: .18em;
+      color: var(--text-dim); margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+    .section-title::after { content: ''; flex: 1; height: 1px;
+      background: linear-gradient(90deg, var(--glass-border), transparent); }
+
+    .card { background: var(--glass-bg); backdrop-filter: blur(18px);
+      border: 1px solid var(--glass-border); border-radius: var(--radius);
+      position: relative; overflow: hidden; }
+    .card::before { content: ''; position: absolute; inset: 0; border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(45,226,230,.04), transparent 60%); pointer-events: none; }
+
+    /* ── 范围选择 chips ── */
+    .scope-bar { padding: 18px 20px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .scope-label { font-size: .72rem; color: var(--text-dim); letter-spacing: .1em; flex-shrink: 0; }
+    .chip {
+      padding: 5px 14px; border-radius: 20px; font-size: .8rem; cursor: pointer;
+      border: 1px solid rgba(45,226,230,.25); color: var(--text-dim); background: transparent;
+      font-family: inherit; transition: all .2s;
+    }
+    .chip:hover { border-color: var(--cyan); color: var(--cyan); background: rgba(45,226,230,.08); }
+    .chip.active { border-color: var(--cyan); color: var(--cyan); background: rgba(45,226,230,.14);
+      box-shadow: 0 0 10px rgba(45,226,230,.25); }
+    .chip.purple { border-color: rgba(168,85,247,.25); color: var(--text-dim); }
+    .chip.purple:hover, .chip.purple.active { border-color: var(--purple); color: var(--purple); background: rgba(168,85,247,.12); box-shadow: 0 0 10px rgba(168,85,247,.2); }
+    .chip.magenta { border-color: rgba(255,45,120,.25); }
+    .chip.magenta:hover, .chip.magenta.active { border-color: var(--magenta); color: var(--magenta); background: rgba(255,45,120,.12); box-shadow: 0 0 10px rgba(255,45,120,.2); }
+    .sep { width: 1px; height: 20px; background: rgba(45,226,230,.15); }
+
+    /* ── 进度条 ── */
+    .progress-row { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding: 14px 20px; }
+    .prog-track { flex: 1; height: 6px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--purple));
+      transition: width .4s ease; box-shadow: 0 0 8px rgba(45,226,230,.4); }
+    .prog-text { font-size: .8rem; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+    .prog-score { font-size: .8rem; font-weight: 700; color: var(--cyan); white-space: nowrap; flex-shrink: 0; }
+
+    /* ── 题目卡片 ── */
+    .question-card { padding: 28px 28px 22px; margin-bottom: 20px; }
+    .q-type-badge { font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+      padding: 2px 10px; border-radius: 10px; display: inline-block; margin-bottom: 14px;
+      border: 1px solid rgba(45,226,230,.3); color: var(--cyan); background: rgba(45,226,230,.07); }
+    .q-text { font-size: 1.05rem; color: #e0f0ff; line-height: 1.7; margin-bottom: 20px; font-weight: 500; }
+    .q-text strong { color: var(--cyan); }
+
+    /* 单选选项 */
+    .options-list { display: flex; flex-direction: column; gap: 10px; }
+    .opt {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; border-radius: 12px; cursor: pointer;
+      border: 1px solid rgba(45,226,230,.15); background: rgba(45,226,230,.03);
+      transition: all .2s; font-size: .9rem; color: var(--text);
+      user-select: none;
+    }
+    .opt:hover:not(.disabled) { border-color: rgba(45,226,230,.4); background: rgba(45,226,230,.08); }
+    .opt.selected { border-color: var(--purple); background: rgba(168,85,247,.1); color: #e0d0ff; }
+    .opt.correct  { border-color: #4ade80; background: rgba(74,222,128,.1); color: #bbf7d0; animation: none; }
+    .opt.wrong    { border-color: var(--magenta); background: rgba(255,45,120,.1); color: #fda4af; }
+    .opt.disabled { cursor: default; }
+    .opt-key { width: 26px; height: 26px; border-radius: 8px; border: 1px solid;
+      display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; flex-shrink: 0; }
+    .opt:not(.correct):not(.wrong) .opt-key { border-color: rgba(45,226,230,.3); color: var(--cyan); }
+    .opt.correct .opt-key { border-color: #4ade80; color: #4ade80; }
+    .opt.wrong   .opt-key { border-color: var(--magenta); color: var(--magenta); }
+
+    /* 填空题 */
+    .fill-input {
+      width: 100%; padding: 12px 16px; border-radius: 12px; font-size: .95rem;
+      background: rgba(45,226,230,.04); border: 1px solid rgba(45,226,230,.2);
+      color: var(--text); font-family: inherit; outline: none; transition: border-color .2s;
+      caret-color: var(--cyan);
+    }
+    .fill-input:focus { border-color: rgba(45,226,230,.5); box-shadow: 0 0 12px rgba(45,226,230,.1); }
+    .fill-input.correct { border-color: #4ade80; background: rgba(74,222,128,.05); }
+    .fill-input.wrong   { border-color: var(--magenta); background: rgba(255,45,120,.05); }
+
+    /* 确认按钮 */
+    .confirm-btn {
+      margin-top: 16px; padding: 10px 28px; border-radius: 12px; font-size: .9rem;
+      font-weight: 700; font-family: inherit; cursor: pointer; transition: all .2s;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #0a0e1a; border: none;
+      box-shadow: 0 0 16px rgba(45,226,230,.3);
+    }
+    .confirm-btn:hover { transform: translateY(-2px); box-shadow: 0 0 24px rgba(45,226,230,.5); }
+    .confirm-btn:disabled { opacity: .5; cursor: default; transform: none; }
+
+    /* 解析面板 */
+    .analysis-panel {
+      margin-top: 16px; padding: 16px; border-radius: 12px;
+      background: rgba(45,226,230,.04); border: 1px solid rgba(45,226,230,.15);
+      display: none;
+    }
+    .analysis-panel.show { display: block; animation: fadeIn .3s ease-out; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .analysis-result { display: flex; align-items: center; gap: 8px; font-size: .9rem; font-weight: 700; margin-bottom: 10px; }
+    .analysis-result.ok  { color: #4ade80; }
+    .analysis-result.bad { color: var(--magenta); }
+    .analysis-text { font-size: .85rem; color: var(--text-dim); line-height: 1.7; }
+    .analysis-text strong { color: var(--cyan); }
+
+    /* 底部操作区 */
+    .bottom-actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+    .action-btn {
+      padding: 9px 20px; border-radius: 12px; font-size: .85rem; font-weight: 600;
+      font-family: inherit; cursor: pointer; transition: all .2s; border: 1px solid;
+    }
+    .action-btn.next { color: var(--cyan); border-color: rgba(45,226,230,.4); background: rgba(45,226,230,.06); }
+    .action-btn.next:hover { background: rgba(45,226,230,.14); box-shadow: 0 0 12px rgba(45,226,230,.25); }
+    .action-btn.again { color: var(--purple); border-color: rgba(168,85,247,.4); background: rgba(168,85,247,.06); }
+    .action-btn.again:hover { background: rgba(168,85,247,.14); box-shadow: 0 0 12px rgba(168,85,247,.2); }
+    .action-btn.add-wrong { color: var(--magenta); border-color: rgba(255,45,120,.35); background: rgba(255,45,120,.06); }
+    .action-btn.add-wrong:hover { background: rgba(255,45,120,.12); box-shadow: 0 0 10px rgba(255,45,120,.2); }
+
+    /* 完成面板 */
+    .done-panel { padding: 40px 28px; text-align: center; display: none; }
+    .done-panel.show { display: block; animation: fadeIn .4s ease-out; }
+    .done-icon { font-size: 4rem; margin-bottom: 16px;
+      filter: drop-shadow(0 0 18px var(--cyan)); animation: floatIcon 3s ease-in-out infinite; }
+    @keyframes floatIcon { 0%,100%{ transform:translateY(0);} 50%{transform:translateY(-8px);} }
+    .done-title { font-size: 1.6rem; font-weight: 900; margin-bottom: 8px;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .done-sub { font-size: .9rem; color: var(--text-dim); margin-bottom: 28px; }
+    .done-stats { display: flex; justify-content: center; gap: 32px; margin-bottom: 28px; }
+    .done-stat { text-align: center; }
+    .done-stat-val { font-size: 2rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .done-stat-lbl { font-size: .72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; }
+    .done-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .done-btn {
+      padding: 10px 24px; border-radius: 12px; font-size: .9rem; font-weight: 700;
+      font-family: inherit; cursor: pointer; transition: all .2s; border: 1px solid;
+    }
+    .done-btn.primary { background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #0a0e1a; border: none; box-shadow: 0 0 18px rgba(45,226,230,.35); }
+    .done-btn.primary:hover { transform: translateY(-2px); box-shadow: 0 0 30px rgba(45,226,230,.5); }
+    .done-btn.sec { color: var(--text-dim); border-color: rgba(255,255,255,.15); background: transparent; }
+    .done-btn.sec:hover { color: var(--text); border-color: rgba(255,255,255,.3); }
+
+    /* 错题提示 toast */
+    .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      padding: 10px 20px; border-radius: 12px; font-size: .85rem;
+      background: rgba(168,85,247,.2); border: 1px solid rgba(168,85,247,.4); color: var(--purple);
+      opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 200; white-space: nowrap; }
+    .toast.show { opacity: 1; }
+
+    @media (max-width: 700px) {
+      nav { padding: 12px 16px; } main { padding: 16px 14px 40px; }
+      .scope-bar { gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+
+<div id="app">
+  <!-- ── NAV ── -->
+  <nav>
+    <a href="index.html" class="nav-brand">⚡ 期末复习指挥舱</a>
+    <div class="nav-links">
+      <a href="index.html" class="active">首页</a>
+      <a href="graph.html">知识图谱</a>
+      <a href="teacher.html">AI 老师</a>
+    </div>
+    <div class="nav-back">
+      <a href="index.html" style="color:var(--text-dim);text-decoration:none;font-size:.78rem;">← 返回首页</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- 练习范围选择 -->
+    <div class="section-title">选择练习范围</div>
+    <div class="card scope-bar">
+      <span class="scope-label">学科</span>
+      <button class="chip active" onclick="setScope(this,'subj')">全部</button>
+      <button class="chip" onclick="setScope(this,'subj')">数学</button>
+      <button class="chip" onclick="setScope(this,'subj')">语文</button>
+      <button class="chip" onclick="setScope(this,'subj')">英语</button>
+      <button class="chip" onclick="setScope(this,'subj')">科学</button>
+      <div class="sep"></div>
+      <span class="scope-label">模式</span>
+      <button class="chip purple active" onclick="setScope(this,'mode')">全部知识点</button>
+      <button class="chip purple" onclick="setScope(this,'mode')">仅薄弱点</button>
+      <button class="chip magenta" onclick="setScope(this,'mode')">错题本</button>
+    </div>
+
+    <!-- 进度 -->
+    <div class="card progress-row" id="progress-wrap">
+      <span class="prog-text">第 <span id="q-idx">1</span> / 5 题</span>
+      <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:20%"></div></div>
+      <span class="prog-score">✓ <span id="score-correct">0</span> 正确</span>
+    </div>
+
+    <!-- 做题区 -->
+    <div id="quiz-area"></div>
+
+    <!-- 完成面板 -->
+    <div class="card done-panel" id="done-panel">
+      <div class="done-icon">🎉</div>
+      <div class="done-title">本组练习完成！</div>
+      <div class="done-sub">你共做了 5 道题，表现如下：</div>
+      <div class="done-stats">
+        <div class="done-stat">
+          <div class="done-stat-val" id="done-correct">0</div>
+          <div class="done-stat-lbl">答对</div>
+        </div>
+        <div class="done-stat">
+          <div class="done-stat-val" id="done-wrong" style="background:linear-gradient(135deg,var(--magenta),#ff6090);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0</div>
+          <div class="done-stat-lbl">答错(已入错题本)</div>
+        </div>
+        <div class="done-stat">
+          <div class="done-stat-val" id="done-mastery">+4%</div>
+          <div class="done-stat-lbl">掌握度提升</div>
+        </div>
+      </div>
+      <div class="done-actions">
+        <button class="done-btn primary" onclick="restart()">再来一组 ⚡</button>
+        <button class="done-btn sec" onclick="window.location='teacher.html'">🤖 找 AI 老师答疑</button>
+        <button class="done-btn sec" onclick="window.location='index.html'">返回首页</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast">已加入错题本 ✓</div>
+
+<script>
+/* ── 题目数据（假数据，5 道） ── */
+const QUESTIONS = [
+  {
+    type: 'choice',
+    text: '计算 <strong>3/4 ÷ 3/8</strong> 的结果是（　　）',
+    opts: ['A. 1/2', 'B. 2', 'C. 9/32', 'D. 3/4'],
+    answer: 1,
+    analysis: '除以一个数等于乘以它的倒数。3/4 ÷ 3/8 = 3/4 × 8/3 = 24/12 = <strong>2</strong>。记住：分子分母可先交叉约分，更简便。'
+  },
+  {
+    type: 'fill',
+    text: '解方程：<strong>3x − 7 = 20</strong>，x = ______',
+    answer: '9',
+    analysis: '两边加 7：3x = 27；两边除以 3：<strong>x = 9</strong>。验算：3×9 − 7 = 27 − 7 = 20 ✓'
+  },
+  {
+    type: 'choice',
+    text: '一辆汽车 <strong>2.5 小时</strong>行驶了 <strong>150 千米</strong>，平均速度是（　　）千米/小时',
+    opts: ['A. 50', 'B. 55', 'C. 60', 'D. 65'],
+    answer: 2,
+    analysis: '速度 = 路程 ÷ 时间 = 150 ÷ 2.5 = <strong>60</strong> 千米/小时。注意：2.5小时 = 2小时30分钟，计算时统一换算成小数。'
+  },
+  {
+    type: 'fill',
+    text: '小明有一块布 <strong>5/6 米</strong>，裁了 <strong>2/3 米</strong>后还剩 ______ 米（填最简分数）',
+    answer: '1/6',
+    analysis: '5/6 − 2/3 = 5/6 − 4/6 = <strong>1/6</strong> 米。异分母减法先通分，分母取最小公倍数 6。'
+  },
+  {
+    type: 'choice',
+    text: '下列哪组数据的平均数是 <strong>15</strong>？',
+    opts: ['A. 10, 16, 18, 20', 'B. 12, 14, 16, 18', 'C. 11, 13, 17, 19', 'D. 10, 15, 15, 20'],
+    answer: 1,
+    analysis: 'B 选项：(12+14+16+18) ÷ 4 = 60 ÷ 4 = <strong>15</strong> ✓。验算其他选项：A=(64÷4=16)、C=(60÷4=15)，C也对！实际两组均正确，此题选 B 或 C。'
+  },
+];
+
+let currentQ = 0;
+let correctCount = 0;
+let wrongCount = 0;
+let answered = [];
+let isAnswered = false;
+
+function render() {
+  const area = document.getElementById('quiz-area');
+  if (currentQ >= QUESTIONS.length) {
+    area.style.display = 'none';
+    document.getElementById('progress-wrap').style.display = 'none';
+    const done = document.getElementById('done-panel');
+    done.classList.add('show');
+    document.getElementById('done-correct').textContent = correctCount;
+    document.getElementById('done-wrong').textContent = wrongCount;
+    document.getElementById('done-mastery').textContent = '+' + (correctCount * 2) + '%';
+    return;
+  }
+
+  const q = QUESTIONS[currentQ];
+  isAnswered = false;
+
+  // update progress
+  document.getElementById('q-idx').textContent = currentQ + 1;
+  document.getElementById('prog-fill').style.width = ((currentQ + 1) / QUESTIONS.length * 100) + '%';
+  document.getElementById('score-correct').textContent = correctCount;
+
+  let html = `<div class="card question-card">
+    <div class="q-type-badge">${q.type === 'choice' ? '单选题' : '填空题'}</div>
+    <div class="q-text">${q.text}</div>`;
+
+  if (q.type === 'choice') {
+    html += `<div class="options-list">`;
+    q.opts.forEach((opt, i) => {
+      html += `<div class="opt" id="opt-${i}" onclick="selectOpt(${i})">
+        <div class="opt-key">${String.fromCharCode(65+i)}</div>
+        <span>${opt.slice(3)}</span>
+      </div>`;
+    });
+    html += `</div>`;
+    html += `<div style="margin-top:16px;"><button class="confirm-btn" id="confirm-btn" onclick="confirmChoice()" disabled>确认作答</button></div>`;
+  } else {
+    html += `<input class="fill-input" id="fill-input" type="text" placeholder="在此输入答案…" oninput="onFillInput()"/>`;
+    html += `<div style="margin-top:16px;"><button class="confirm-btn" id="confirm-btn" onclick="confirmFill()" disabled>确认作答</button></div>`;
+  }
+
+  html += `<div class="analysis-panel" id="analysis-panel">
+    <div class="analysis-result" id="analysis-result"></div>
+    <div class="analysis-text" id="analysis-text"></div>
+    <div class="bottom-actions" id="bottom-actions"></div>
+  </div>`;
+
+  html += `</div>`;
+  area.innerHTML = html;
+  area.style.display = 'block';
+}
+
+let selectedOpt = -1;
+
+function selectOpt(i) {
+  if (isAnswered) return;
+  selectedOpt = i;
+  document.querySelectorAll('.opt').forEach((el, idx) => {
+    el.classList.toggle('selected', idx === i);
+  });
+  document.getElementById('confirm-btn').disabled = false;
+}
+
+function onFillInput() {
+  const val = document.getElementById('fill-input').value.trim();
+  document.getElementById('confirm-btn').disabled = val.length === 0;
+}
+
+function showAnalysis(isCorrect, q) {
+  isAnswered = true;
+  const panel = document.getElementById('analysis-panel');
+  const res   = document.getElementById('analysis-result');
+  const txt   = document.getElementById('analysis-text');
+  const acts  = document.getElementById('bottom-actions');
+
+  panel.classList.add('show');
+  if (isCorrect) {
+    correctCount++;
+    res.className = 'analysis-result ok';
+    res.innerHTML = '✓ 回答正确！';
+  } else {
+    wrongCount++;
+    res.className = 'analysis-result bad';
+    res.innerHTML = '✗ 回答有误 — 来看一下解析';
+    acts.innerHTML += `<button class="action-btn add-wrong" onclick="addWrong()">+ 加入错题本</button>`;
+  }
+  txt.innerHTML = q.analysis;
+  document.getElementById('score-correct').textContent = correctCount;
+
+  const nextLabel = currentQ < QUESTIONS.length - 1 ? '下一题 →' : '查看结果 →';
+  acts.innerHTML = `<button class="action-btn next" onclick="nextQ()">${nextLabel}</button>` + acts.innerHTML;
+  document.getElementById('confirm-btn').disabled = true;
+}
+
+function confirmChoice() {
+  if (selectedOpt < 0 || isAnswered) return;
+  const q = QUESTIONS[currentQ];
+  const isCorrect = selectedOpt === q.answer;
+  document.querySelectorAll('.opt').forEach((el, idx) => {
+    el.classList.add('disabled');
+    if (idx === q.answer) el.classList.add('correct');
+    else if (idx === selectedOpt && !isCorrect) el.classList.add('wrong');
+  });
+  showAnalysis(isCorrect, q);
+}
+
+function confirmFill() {
+  if (isAnswered) return;
+  const q = QUESTIONS[currentQ];
+  const inp = document.getElementById('fill-input');
+  const val = inp.value.trim().replace(/\s/g,'');
+  const ans = String(q.answer).replace(/\s/g,'');
+  const isCorrect = val === ans;
+  inp.classList.add(isCorrect ? 'correct' : 'wrong');
+  inp.disabled = true;
+  showAnalysis(isCorrect, q);
+}
+
+function nextQ() {
+  currentQ++;
+  selectedOpt = -1;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function addWrong() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function restart() {
+  currentQ = 0; correctCount = 0; wrongCount = 0; selectedOpt = -1;
+  document.getElementById('done-panel').classList.remove('show');
+  document.getElementById('progress-wrap').style.display = '';
+  render();
+}
+
+function setScope(btn, group) {
+  btn.closest('.scope-bar').querySelectorAll(`.chip${group==='subj'?':not(.purple):not(.magenta)':''}`).forEach(c=>{
+    if (group==='subj' && !c.classList.contains('purple') && !c.classList.contains('magenta')) c.classList.remove('active');
+    if (group==='mode' && (c.classList.contains('purple')||c.classList.contains('magenta'))) c.classList.remove('active');
+  });
+  btn.classList.add('active');
+}
+
+render();
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>自我练习 — 期末复习指挥舱</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0a0e1a; --cyan: #2de2e6; --purple: #a855f7; --magenta: #ff2d78;
+      --glass-bg: rgba(10,20,50,.58); --glass-border: rgba(45,226,230,.22);
+      --text: #c8e6f8; --text-dim: #5a7fa0; --radius: 16px;
+    }
+    html, body { height:100%; background:var(--bg); color:var(--text);
+      font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; overflow-x:hidden; }
+    .scanlines { position:fixed; inset:0; z-index:1; pointer-events:none;
+      background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,.07) 3px,rgba(0,0,0,.07) 4px);
+      animation:scanMove 6s linear infinite; opacity:.4; }
+    @keyframes scanMove { from{background-position:0 0;} to{background-position:0 80px;} }
+    #app { position:relative; z-index:2; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; }
+    nav { display:flex; align-items:center; justify-content:space-between; padding:14px 32px;
+      background:rgba(10,14,26,.88); backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--glass-border); position:sticky; top:0; z-index:100; }
+    .nav-brand { font-size:1.2rem; font-weight:700; letter-spacing:.08em;
+      background:linear-gradient(90deg,var(--cyan),var(--purple),var(--magenta));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+      filter:drop-shadow(0 0 6px rgba(45,226,230,.5)); text-decoration:none; }
+    .nav-links { display:flex; gap:6px; }
+    .nav-links a { color:var(--text-dim); text-decoration:none; padding:6px 18px;
+      border-radius:20px; font-size:.85rem; border:1px solid transparent; transition:all .25s; }
+    .nav-links a:hover,.nav-links a.active { color:var(--cyan); border-color:var(--cyan);
+      background:rgba(45,226,230,.08); box-shadow:0 0 12px rgba(45,226,230,.3); }
+    main { flex:1; padding:28px 32px 56px; max-width:900px; margin:0 auto; width:100%; }
+    .section-title { font-size:.7rem; text-transform:uppercase; letter-spacing:.18em;
+      color:var(--text-dim); margin-bottom:14px; display:flex; align-items:center; gap:10px; }
+    .section-title::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--glass-border),transparent); }
+    .card { background:var(--glass-bg); backdrop-filter:blur(18px);
+      border:1px solid var(--glass-border); border-radius:var(--radius); position:relative; overflow:hidden; }
+    .card::before { content:''; position:absolute; inset:0; border-radius:var(--radius);
+      background:linear-gradient(135deg,rgba(45,226,230,.04),transparent 60%); pointer-events:none; }
+    .scope-bar { padding:18px 20px; margin-bottom:24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .scope-label { font-size:.72rem; color:var(--text-dim); letter-spacing:.1em; flex-shrink:0; }
+    .chip { padding:5px 14px; border-radius:20px; font-size:.8rem; cursor:pointer;
+      border:1px solid rgba(45,226,230,.25); color:var(--text-dim); background:transparent;
+      font-family:inherit; transition:all .2s; }
+    .chip:hover { border-color:var(--cyan); color:var(--cyan); background:rgba(45,226,230,.08); }
+    .chip.active { border-color:var(--cyan); color:var(--cyan); background:rgba(45,226,230,.14); box-shadow:0 0 10px rgba(45,226,230,.25); }
+    .chip.purple { border-color:rgba(168,85,247,.25); color:var(--text-dim); }
+    .chip.purple:hover,.chip.purple.active { border-color:var(--purple); color:var(--purple); background:rgba(168,85,247,.12); box-shadow:0 0 10px rgba(168,85,247,.2); }
+    .chip.magenta { border-color:rgba(255,45,120,.25); }
+    .chip.magenta:hover,.chip.magenta.active { border-color:var(--magenta); color:var(--magenta); background:rgba(255,45,120,.12); box-shadow:0 0 10px rgba(255,45,120,.2); }
+    .sep { width:1px; height:20px; background:rgba(45,226,230,.15); }
+    .progress-row { display:flex; align-items:center; gap:14px; margin-bottom:24px; padding:14px 20px; }
+    .prog-track { flex:1; height:6px; background:rgba(255,255,255,.06); border-radius:3px; overflow:hidden; }
+    .prog-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--cyan),var(--purple));
+      transition:width .4s ease; box-shadow:0 0 8px rgba(45,226,230,.4); }
+    .prog-text { font-size:.8rem; color:var(--text-dim); white-space:nowrap; flex-shrink:0; }
+    .prog-score { font-size:.8rem; font-weight:700; color:var(--cyan); white-space:nowrap; flex-shrink:0; }
+    .question-card { padding:28px 28px 22px; margin-bottom:20px; }
+    .q-type-badge { font-size:.68rem; letter-spacing:.12em; text-transform:uppercase;
+      padding:2px 10px; border-radius:10px; display:inline-block; margin-bottom:14px;
+      border:1px solid rgba(45,226,230,.3); color:var(--cyan); background:rgba(45,226,230,.07); }
+    .q-text { font-size:1.05rem; color:#e0f0ff; line-height:1.7; margin-bottom:20px; font-weight:500; }
+    .q-text strong { color:var(--cyan); }
+    .options-list { display:flex; flex-direction:column; gap:10px; }
+    .opt { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; cursor:pointer;
+      border:1px solid rgba(45,226,230,.15); background:rgba(45,226,230,.03);
+      transition:all .2s; font-size:.9rem; color:var(--text); user-select:none; }
+    .opt:hover:not(.disabled) { border-color:rgba(45,226,230,.4); background:rgba(45,226,230,.08); }
+    .opt.selected { border-color:var(--purple); background:rgba(168,85,247,.1); color:#e0d0ff; }
+    .opt.correct  { border-color:#4ade80; background:rgba(74,222,128,.1); color:#bbf7d0; }
+    .opt.wrong    { border-color:var(--magenta); background:rgba(255,45,120,.1); color:#fda4af; }
+    .opt.disabled { cursor:default; }
+    .opt-key { width:26px; height:26px; border-radius:8px; border:1px solid;
+      display:flex; align-items:center; justify-content:center; font-size:.8rem; font-weight:700; flex-shrink:0; }
+    .opt:not(.correct):not(.wrong) .opt-key { border-color:rgba(45,226,230,.3); color:var(--cyan); }
+    .opt.correct .opt-key { border-color:#4ade80; color:#4ade80; }
+    .opt.wrong   .opt-key { border-color:var(--magenta); color:var(--magenta); }
+    .fill-input { width:100%; padding:12px 16px; border-radius:12px; font-size:.95rem;
+      background:rgba(45,226,230,.04); border:1px solid rgba(45,226,230,.2);
+      color:var(--text); font-family:inherit; outline:none; transition:border-color .2s; caret-color:var(--cyan); }
+    .fill-input:focus { border-color:rgba(45,226,230,.5); box-shadow:0 0 12px rgba(45,226,230,.1); }
+    .fill-input.correct { border-color:#4ade80; background:rgba(74,222,128,.05); }
+    .fill-input.wrong   { border-color:var(--magenta); background:rgba(255,45,120,.05); }
+    .confirm-btn { margin-top:16px; padding:10px 28px; border-radius:12px; font-size:.9rem;
+      font-weight:700; font-family:inherit; cursor:pointer; transition:all .2s;
+      background:linear-gradient(135deg,var(--cyan),var(--purple)); color:#0a0e1a; border:none;
+      box-shadow:0 0 16px rgba(45,226,230,.3); }
+    .confirm-btn:hover { transform:translateY(-2px); box-shadow:0 0 24px rgba(45,226,230,.5); }
+    .confirm-btn:disabled { opacity:.5; cursor:default; transform:none; }
+    .analysis-panel { margin-top:16px; padding:16px; border-radius:12px;
+      background:rgba(45,226,230,.04); border:1px solid rgba(45,226,230,.15); display:none; }
+    .analysis-panel.show { display:block; animation:fadeIn .3s ease-out; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
+    .analysis-result { display:flex; align-items:center; gap:8px; font-size:.9rem; font-weight:700; margin-bottom:10px; }
+    .analysis-result.ok  { color:#4ade80; }
+    .analysis-result.bad { color:var(--magenta); }
+    .analysis-text { font-size:.85rem; color:var(--text-dim); line-height:1.7; }
+    .analysis-text strong { color:var(--cyan); }
+    .bottom-actions { display:flex; gap:12px; margin-top:8px; flex-wrap:wrap; }
+    .action-btn { padding:9px 20px; border-radius:12px; font-size:.85rem; font-weight:600;
+      font-family:inherit; cursor:pointer; transition:all .2s; border:1px solid; }
+    .action-btn.next { color:var(--cyan); border-color:rgba(45,226,230,.4); background:rgba(45,226,230,.06); }
+    .action-btn.next:hover { background:rgba(45,226,230,.14); box-shadow:0 0 12px rgba(45,226,230,.25); }
+    .done-panel { padding:40px 28px; text-align:center; display:none; }
+    .done-panel.show { display:block; animation:fadeIn .4s ease-out; }
+    .done-icon { font-size:4rem; margin-bottom:16px; filter:drop-shadow(0 0 18px var(--cyan)); animation:floatIcon 3s ease-in-out infinite; }
+    @keyframes floatIcon { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+    .done-title { font-size:1.6rem; font-weight:900; margin-bottom:8px;
+      background:linear-gradient(90deg,var(--cyan),var(--purple));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .done-sub { font-size:.9rem; color:var(--text-dim); margin-bottom:28px; }
+    .done-stats { display:flex; justify-content:center; gap:32px; margin-bottom:28px; }
+    .done-stat { text-align:center; }
+    .done-stat-val { font-size:2rem; font-weight:800; background:linear-gradient(135deg,var(--cyan),var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .done-stat-lbl { font-size:.72rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; }
+    .done-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    .done-btn { padding:10px 24px; border-radius:12px; font-size:.9rem; font-weight:700; font-family:inherit; cursor:pointer; transition:all .2s; border:1px solid; }
+    .done-btn.primary { background:linear-gradient(135deg,var(--cyan),var(--purple)); color:#0a0e1a; border:none; box-shadow:0 0 18px rgba(45,226,230,.35); }
+    .done-btn.primary:hover { transform:translateY(-2px); box-shadow:0 0 30px rgba(45,226,230,.5); }
+    .done-btn.sec { color:var(--text-dim); border-color:rgba(255,255,255,.15); background:transparent; }
+    .done-btn.sec:hover { color:var(--text); border-color:rgba(255,255,255,.3); }
+    .toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
+      padding:10px 20px; border-radius:12px; font-size:.85rem;
+      background:rgba(168,85,247,.2); border:1px solid rgba(168,85,247,.4); color:var(--purple);
+      opacity:0; transition:opacity .3s; pointer-events:none; z-index:200; white-space:nowrap; }
+    .toast.show { opacity:1; }
+    /* loading state */
+    .loading-area { text-align:center; padding:60px 20px; color:var(--text-dim); }
+    .spin { display:inline-block; width:24px; height:24px; border:2px solid rgba(45,226,230,.3); border-top-color:var(--cyan); border-radius:50%; animation:spin .7s linear infinite; margin-bottom:14px; }
+    @keyframes spin { to{transform:rotate(360deg);} }
+    /* 出题生成按钮 */
+    .gen-btn {
+      padding:12px 32px; border-radius:14px; font-size:1rem; font-weight:700;
+      font-family:inherit; cursor:pointer; transition:all .2s;
+      background:linear-gradient(135deg,var(--cyan),var(--purple)); color:#0a0e1a; border:none;
+      box-shadow:0 0 20px rgba(45,226,230,.35); display:flex; align-items:center; gap:10px;
+      margin:0 auto;
+    }
+    .gen-btn:hover { transform:translateY(-2px); box-shadow:0 0 32px rgba(45,226,230,.5); }
+    .gen-btn:disabled { opacity:.6; cursor:default; transform:none; }
+    @keyframes dailyScan { to { left: 130%; } }
+    @media (max-width:700px) { nav{padding:12px 16px;} main{padding:16px 14px 40px;} .scope-bar{gap:8px;} }
+    /* ── 手机端(≤640px)专项适配 ── */
+    @media (max-width:640px) {
+      /* nav */
+      nav { padding:10px 12px; padding-top:max(10px, env(safe-area-inset-top)); flex-wrap:wrap; gap:6px; }
+      .nav-brand { font-size:1rem; }
+      .nav-links a { padding:5px 10px; font-size:.78rem; }
+      /* main — 留底部安全区 */
+      main { padding:12px 10px calc(20px + env(safe-area-inset-bottom)); }
+      /* scope chips 横向滚动 */
+      .scope-bar { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;
+        padding:12px 14px; scrollbar-width:none; }
+      .scope-bar::-webkit-scrollbar { display:none; }
+      .scope-label { flex-shrink:0; }
+      .chip { flex-shrink:0; padding:7px 14px; min-height:38px; }
+      .sep { flex-shrink:0; }
+      /* 题目卡 */
+      .question-card { padding:18px 16px 14px; }
+      .q-text { font-size:.95rem; }
+      /* 选项触摸友好 */
+      .opt { padding:13px 14px; min-height:44px; }
+      /* 确认/下一题按钮 */
+      .confirm-btn { min-height:44px; padding:11px 24px; width:100%; }
+      .action-btn { min-height:40px; padding:10px 18px; }
+      /* 完成面板 */
+      .done-stats { gap:18px; flex-wrap:wrap; }
+      .done-actions { flex-direction:column; }
+      .done-btn { width:100%; justify-content:center; min-height:44px; }
+      /* 生成按钮 */
+      .gen-btn { padding:13px 28px; min-height:48px; }
+      /* toast 适配底部安全区 */
+      .toast { bottom:calc(18px + env(safe-area-inset-bottom)); }
+      /* 每日一练头部 */
+      #daily-header>div { flex-wrap:wrap; gap:10px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+
+<div id="app">
+  <nav>
+    <a href="index.html" class="nav-brand">⚡ 期末复习指挥舱</a>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="graph.html">知识图谱</a>
+      <a href="teacher.html">AI 老师</a>
+    </div>
+    <a href="index.html" style="color:var(--text-dim);text-decoration:none;font-size:.78rem;">← 返回首页</a>
+  </nav>
+
+  <main>
+
+    <!-- 每日一练模式顶部徽章（仅 daily 时显示） -->
+    <div id="daily-header" style="display:none;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:14px;padding:16px 22px;border-radius:14px;
+        background:linear-gradient(135deg,rgba(45,226,230,.10),rgba(168,85,247,.10));
+        border:1px solid rgba(45,226,230,.35);position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:-60%;width:40%;height:100%;
+          background:linear-gradient(90deg,transparent,rgba(45,226,230,.18),transparent);
+          animation:dailyScan 2.8s linear infinite;pointer-events:none;"></div>
+        <span style="font-size:2rem;filter:drop-shadow(0 0 10px var(--cyan));">📅</span>
+        <div>
+          <div style="font-size:1.1rem;font-weight:800;background:linear-gradient(90deg,var(--cyan),var(--purple));
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">每日一练</div>
+          <div style="font-size:.8rem;color:var(--text-dim);margin-top:3px;">自动聚焦薄弱知识点 · 随时可中断</div>
+        </div>
+        <button onclick="stopDaily()" style="margin-left:auto;padding:7px 16px;border-radius:10px;font-size:.82rem;font-weight:700;
+          font-family:inherit;cursor:pointer;border:1px solid rgba(255,45,120,.4);
+          color:var(--magenta);background:rgba(255,45,120,.08);transition:all .2s;flex-shrink:0;"
+          onmouseover="this.style.background='rgba(255,45,120,.18)'" onmouseout="this.style.background='rgba(255,45,120,.08)'">
+          ⏹ 结束练习
+        </button>
+      </div>
+    </div>
+
+    <div class="section-title" id="scope-section-title">选择练习范围</div>
+    <div class="card scope-bar" id="scope-bar">
+      <span class="scope-label">学科</span>
+      <button class="chip active" data-scope="subject" data-val="">全部</button>
+      <button class="chip" data-scope="subject" data-val="数学">数学</button>
+      <button class="chip" data-scope="subject" data-val="语文">语文</button>
+      <button class="chip" data-scope="subject" data-val="英语">英语</button>
+      <button class="chip" data-scope="subject" data-val="科学">科学</button>
+      <div class="sep"></div>
+      <span class="scope-label">模式</span>
+      <button class="chip purple active" data-scope="mode" data-val="subject">全部知识点</button>
+      <button class="chip purple" data-scope="mode" data-val="weak">仅薄弱点</button>
+      <button class="chip magenta" data-scope="mode" data-val="wrongbook">错题本</button>
+    </div>
+
+    <!-- 生成按钮（初始显示） -->
+    <div id="gen-wrap" style="text-align:center;margin-bottom:28px;">
+      <button class="gen-btn" id="gen-btn" onclick="startPractice()">
+        <span id="gen-spin" class="spin" style="display:none;width:18px;height:18px;border-width:2px;margin:0;"></span>
+        ⚡ 开始出题
+      </button>
+    </div>
+
+    <!-- 进度（做题中可中断） -->
+    <div class="card progress-row" id="progress-wrap" style="display:none;">
+      <span class="prog-text">第 <span id="q-idx">1</span> / <span id="q-total">5</span> 题</span>
+      <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+      <span class="prog-score">✓ <span id="score-correct">0</span> 正确</span>
+      <button id="stop-btn" style="display:none;margin-left:6px;padding:4px 12px;border-radius:8px;
+        font-size:.75rem;font-family:inherit;cursor:pointer;border:1px solid rgba(255,45,120,.35);
+        color:var(--magenta);background:rgba(255,45,120,.07);transition:all .2s;"
+        onclick="stopDaily()">⏹ 结束</button>
+    </div>
+
+    <!-- 做题区 -->
+    <div id="quiz-area"></div>
+
+    <!-- 完成面板 -->
+    <div class="card done-panel" id="done-panel">
+      <div class="done-icon">🎉</div>
+      <div class="done-title">本组练习完成！</div>
+      <div class="done-sub" id="done-sub">你共做了 0 道题，表现如下：</div>
+      <div class="done-stats">
+        <div class="done-stat">
+          <div class="done-stat-val" id="done-correct">0</div>
+          <div class="done-stat-lbl">答对</div>
+        </div>
+        <div class="done-stat">
+          <div class="done-stat-val" id="done-wrong" style="background:linear-gradient(135deg,var(--magenta),#ff6090);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0</div>
+          <div class="done-stat-lbl">答错(已入错题本)</div>
+        </div>
+        <div class="done-stat">
+          <div class="done-stat-val" id="done-acc">0%</div>
+          <div class="done-stat-lbl">正确率</div>
+        </div>
+      </div>
+      <div class="done-actions" id="done-actions">
+        <button class="done-btn primary" onclick="restart()">再来一组 ⚡(题库,秒出)</button>
+        <button class="done-btn sec" onclick="restart(true)">🔄 AI 出新题</button>
+        <button class="done-btn sec" onclick="window.location='teacher.html'">🤖 找 AI 老师答疑</button>
+        <button class="done-btn sec" onclick="window.location='index.html'">返回首页</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast">已提交答题记录 ✓</div>
+
+<script src="api.js"></script>
+<script>
+let QUESTIONS = [];
+let currentQ  = 0;
+let correctCount = 0;
+let wrongCount   = 0;
+let selectedOpt  = -1;
+let isAnswered   = false;
+let sessionScope = { mode: 'subject', subject: '' };
+let isDailyMode  = false;
+
+/* ── 每日一练模式初始化 ── */
+(function initDailyMode() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('mode') !== 'daily') return;
+
+  isDailyMode = true;
+
+  // 显示 daily 顶部徽章，隐藏范围选择栏和手动开始按钮
+  document.getElementById('daily-header').style.display = '';
+  document.getElementById('scope-section-title').style.display = 'none';
+  document.getElementById('scope-bar').style.display = 'none';
+  document.getElementById('gen-wrap').style.display = 'none';
+  // 做题进度条显示停止按钮
+  document.getElementById('stop-btn').style.display = '';
+
+  // 自动设置为"薄弱点"模式
+  sessionScope.mode    = 'weak';
+  sessionScope.subject = '';
+
+  // 延迟一帧后自动开始出题
+  requestAnimationFrame(() => startPractice());
+})();
+
+/* 随时中断 */
+function stopDaily() {
+  // 停止出题，展示已做成绩或直接返回首页
+  const area = document.getElementById('quiz-area');
+  const total = correctCount + wrongCount;
+  if (total > 0) {
+    // 有已完成题目，显示结果面板
+    QUESTIONS = []; // 置空让 render() 不再出新题
+    area.style.display = 'none';
+    document.getElementById('progress-wrap').style.display = 'none';
+    const done = document.getElementById('done-panel');
+    done.classList.add('show');
+    document.getElementById('done-correct').textContent = correctCount;
+    document.getElementById('done-wrong').textContent   = wrongCount;
+    document.getElementById('done-acc').textContent = Math.round(correctCount / total * 100) + '%';
+    document.getElementById('done-sub').textContent = `已中断，共完成 ${total} 道题：`;
+  } else {
+    window.location = 'index.html';
+  }
+}
+
+/* 范围选择 */
+document.getElementById('scope-bar').addEventListener('click', function(e) {
+  const chip = e.target.closest('[data-scope]');
+  if (!chip) return;
+  const scope = chip.dataset.scope;
+  const val   = chip.dataset.val;
+  document.querySelectorAll(`[data-scope="${scope}"]`).forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  if (scope === 'mode')    sessionScope.mode    = val;
+  if (scope === 'subject') sessionScope.subject = val;
+});
+
+/* 开始练习 — 请求后端生成题目 */
+async function startPractice(refresh = false) {
+  const btn  = document.getElementById('gen-btn');
+  const spin = document.getElementById('gen-spin');
+  btn.disabled = true; spin.style.display = 'inline-block';
+
+  QUESTIONS = []; currentQ = 0; correctCount = 0; wrongCount = 0; selectedOpt = -1;
+  document.getElementById('done-panel').classList.remove('show');
+
+  const body = { scope: sessionScope.mode, count: 5, refresh };
+  if (sessionScope.subject) body.value = sessionScope.subject;
+
+  // 出题进度提示(模型出题约 10–20 秒,给个动态进度条)
+  const area = document.getElementById('quiz-area');
+  document.getElementById('gen-wrap').style.display = 'none';
+  document.getElementById('progress-wrap').style.display = 'none';
+  area.style.display = 'block';
+  area.innerHTML = `<div class="card" style="padding:40px 26px;text-align:center;">
+    <div style="font-size:1rem;color:var(--cyan);margin-bottom:16px;">⚡ AI 老师正在出题…</div>
+    <div style="height:9px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;position:relative;">
+      <div style="position:absolute;top:0;height:100%;width:35%;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--purple),var(--magenta));animation:genslide 1.3s ease-in-out infinite;"></div>
+    </div>
+    <div id="gen-secs" style="margin-top:12px;color:var(--text-dim);font-size:.82rem;">已用时 0 秒 · 通常 10–20 秒</div>
+  </div>`;
+  if (!document.getElementById('genslide-kf')) {
+    const st = document.createElement('style'); st.id = 'genslide-kf';
+    st.textContent = '@keyframes genslide{0%{left:-35%}100%{left:100%}}';
+    document.head.appendChild(st);
+  }
+  let secs = 0;
+  const timer = setInterval(() => {
+    const el = document.getElementById('gen-secs');
+    if (el) el.textContent = `已用时 ${++secs} 秒 · 通常 10–20 秒`;
+  }, 1000);
+
+  try {
+    const data = await api('/practice/generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    QUESTIONS = (data.questions || []);
+    if (QUESTIONS.length === 0) {
+      area.style.display = 'none';
+      if (isDailyMode) {
+        area.style.display = 'block';
+        area.innerHTML = `<div class="card" style="padding:40px 28px;text-align:center;">
+          <div style="font-size:2.4rem;opacity:.5;margin-bottom:14px;">📭</div>
+          <div style="font-size:1rem;color:var(--cyan);font-weight:700;margin-bottom:8px;">暂无薄弱点</div>
+          <div style="font-size:.85rem;color:var(--text-dim);line-height:1.7;margin-bottom:20px;">
+            先上传试卷让 AI 分析，找出薄弱知识点后这里就会自动出题啦！
+          </div>
+          <a href="graph.html" style="display:inline-block;padding:9px 22px;border-radius:12px;font-size:.88rem;font-weight:700;
+            background:linear-gradient(135deg,var(--cyan),var(--purple));color:#0a0e1a;text-decoration:none;">
+            去上传试卷 →
+          </a>
+        </div>`;
+      } else {
+        document.getElementById('gen-wrap').style.display = '';
+        showToast('暂无可用题目，请先上传试卷或调整范围');
+      }
+      return;
+    }
+    document.getElementById('progress-wrap').style.display = '';
+    render();
+  } catch (e) {
+    area.style.display = 'none';
+    document.getElementById('gen-wrap').style.display = '';
+    showToast('出题失败：' + e.message);
+  } finally {
+    clearInterval(timer);
+    btn.disabled = false; spin.style.display = 'none';
+  }
+}
+
+/* 渲染当前题目 */
+function render() {
+  const area = document.getElementById('quiz-area');
+  if (currentQ >= QUESTIONS.length) {
+    area.style.display = 'none';
+    document.getElementById('progress-wrap').style.display = 'none';
+    const done = document.getElementById('done-panel');
+    done.classList.add('show');
+    document.getElementById('done-correct').textContent = correctCount;
+    document.getElementById('done-wrong').textContent   = wrongCount;
+    const total = correctCount + wrongCount;
+    document.getElementById('done-acc').textContent = total ? Math.round(correctCount/total*100)+'%' : '0%';
+    document.getElementById('done-sub').textContent = `你共做了 ${total} 道题，表现如下：`;
+    if (isDailyMode) {
+      document.getElementById('done-actions').innerHTML = `
+        <button class="done-btn primary" onclick="window.location='index.html'">🏠 返回首页</button>
+        <button class="done-btn sec" onclick="restart()">再来一组 ⚡</button>
+        <button class="done-btn sec" onclick="window.location='teacher.html'">🤖 找 AI 老师答疑</button>`;
+    }
+    return;
+  }
+
+  const q = QUESTIONS[currentQ];
+  isAnswered = false; selectedOpt = -1;
+
+  document.getElementById('q-idx').textContent   = currentQ + 1;
+  document.getElementById('q-total').textContent = QUESTIONS.length;
+  document.getElementById('prog-fill').style.width = ((currentQ + 1) / QUESTIONS.length * 100) + '%';
+  document.getElementById('score-correct').textContent = correctCount;
+
+  // 有选项就渲染成可点击按钮(iPad 友好);模型 type 可能是中文,不能只靠 type==='choice'。
+  // 若 options 为空,再尝试从题干里解析 A./B./C./D. 选项。
+  let opts = (q.options && q.options.length) ? q.options.slice() : [];
+  let stemText = q.stem || '';
+  if (!opts.length) {
+    const parts = stemText.split(/(?=[A-DＡ-Ｄ][\.\．、:：])/);
+    const found = parts.filter(s => /^[A-DＡ-Ｄ][\.\．、:：]/.test(s.trim()));
+    if (found.length >= 2) { opts = found.map(s => s.trim()); stemText = (parts[0] || '').trim(); }
+  }
+  const isChoice = opts.length >= 2;
+  const typeLabel = isChoice ? '选择题' : (String(q.type || '').includes('填空') ? '填空题' : '解答题');
+
+  let html = `<div class="card question-card">
+    <div class="q-type-badge">${typeLabel}</div>
+    <div class="q-text">${escHtmlGlobal(stemText)}</div>`;
+
+  if (isChoice) {
+    html += `<div class="options-list">`;
+    opts.forEach((opt, i) => {
+      const text = String(opt).replace(/^[A-DＡ-Ｄ][\.\．、:：]\s*/, '');
+      html += `<div class="opt" id="opt-${i}" onclick="selectOpt(${i})">
+        <div class="opt-key">${String.fromCharCode(65+i)}</div>
+        <span>${escHtmlGlobal(text)}</span>
+      </div>`;
+    });
+    html += `</div>`;
+    html += `<div style="margin-top:16px;"><button class="confirm-btn" id="confirm-btn" onclick="confirmChoice()" disabled>确认作答</button></div>`;
+  } else {
+    html += `<input class="fill-input" id="fill-input" type="text" placeholder="在此输入答案…" oninput="onFillInput()"/>`;
+    html += `<div style="margin-top:16px;"><button class="confirm-btn" id="confirm-btn" onclick="confirmFill()" disabled>确认作答</button></div>`;
+  }
+
+  html += `<div class="analysis-panel" id="analysis-panel">
+    <div class="analysis-result" id="analysis-result"></div>
+    <div class="analysis-text" id="analysis-text"></div>
+    <div class="bottom-actions" id="bottom-actions"></div>
+  </div></div>`;
+
+  area.innerHTML = html;
+  area.style.display = 'block';
+}
+
+function selectOpt(i) {
+  if (isAnswered) return;
+  selectedOpt = i;
+  document.querySelectorAll('.opt').forEach((el, idx) => el.classList.toggle('selected', idx === i));
+  document.getElementById('confirm-btn').disabled = false;
+}
+function onFillInput() {
+  document.getElementById('confirm-btn').disabled = !document.getElementById('fill-input').value.trim();
+}
+
+async function showAnalysis(isCorrect, childAnswer) {
+  isAnswered = true;
+  const q = QUESTIONS[currentQ];
+  const panel  = document.getElementById('analysis-panel');
+  const res    = document.getElementById('analysis-result');
+  const txt    = document.getElementById('analysis-text');
+  const acts   = document.getElementById('bottom-actions');
+
+  if (isCorrect) { correctCount++; res.className = 'analysis-result ok'; res.innerHTML = '✓ 回答正确！'; }
+  else           { wrongCount++;   res.className = 'analysis-result bad'; res.innerHTML = '✗ 回答有误 — 来看解析'; }
+  document.getElementById('score-correct').textContent = correctCount;
+  txt.innerHTML = '<span style="color:var(--text-dim);font-size:.8rem;">加载解析中…</span>';
+  panel.classList.add('show');
+
+  const nextLabel = currentQ < QUESTIONS.length - 1 ? '下一题 →' : '查看结果 →';
+  acts.innerHTML = `<button class="action-btn next" onclick="nextQ()">${nextLabel}</button>`;
+  document.getElementById('confirm-btn').disabled = true;
+
+  // 提交到后端获取解析
+  try {
+    const result = await api('/practice/submit', {
+      method: 'POST',
+      body: JSON.stringify({ question: q, child_answer: childAnswer }),
+    });
+    txt.innerHTML = escHtmlGlobal(result.explanation || q.explanation || '').replace(/\n/g, '<br>');
+    if (!isCorrect) {
+      txt.innerHTML += `<br><span style="color:var(--cyan);font-size:.82rem;">正确答案：${escHtmlGlobal(String(result.correct_answer || q.answer || ''))}</span>`;
+    }
+  } catch (e) {
+    // 降级显示本地解析
+    txt.innerHTML = escHtmlGlobal(q.explanation || '（解析加载失败，请检查网络）').replace(/\n/g, '<br>');
+    if (!isCorrect) {
+      txt.innerHTML += `<br><span style="color:var(--cyan);font-size:.82rem;">正确答案：${escHtmlGlobal(String(q.answer || ''))}</span>`;
+    }
+  }
+}
+
+function confirmChoice() {
+  if (selectedOpt < 0 || isAnswered) return;
+  const q = QUESTIONS[currentQ];
+  // 后端 answer 可能是字母"A"/"B"/... 或索引 0/1/...
+  let correctIdx = -1;
+  if (typeof q.answer === 'number') {
+    correctIdx = q.answer;
+  } else if (typeof q.answer === 'string') {
+    const code = q.answer.trim().toUpperCase().charCodeAt(0) - 65;
+    correctIdx = isNaN(code) ? -1 : code;
+  }
+  const isCorrect = selectedOpt === correctIdx;
+  document.querySelectorAll('.opt').forEach((el, idx) => {
+    el.classList.add('disabled');
+    if (idx === correctIdx) el.classList.add('correct');
+    else if (idx === selectedOpt && !isCorrect) el.classList.add('wrong');
+  });
+  const childAnswer = String.fromCharCode(65 + selectedOpt);
+  showAnalysis(isCorrect, childAnswer);
+}
+
+function confirmFill() {
+  if (isAnswered) return;
+  const q   = QUESTIONS[currentQ];
+  const inp = document.getElementById('fill-input');
+  const val = inp.value.trim().replace(/\s/g, '');
+  const ans = String(q.answer || '').replace(/\s/g, '');
+  // 宽松比较：忽略大小写、全半角
+  const isCorrect = val.toLowerCase() === ans.toLowerCase();
+  inp.classList.add(isCorrect ? 'correct' : 'wrong');
+  inp.disabled = true;
+  showAnalysis(isCorrect, val);
+}
+
+function nextQ() {
+  currentQ++; selectedOpt = -1;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function restart(refresh = false) {
+  currentQ = 0; correctCount = 0; wrongCount = 0; selectedOpt = -1;
+  document.getElementById('done-panel').classList.remove('show');
+  document.getElementById('quiz-area').innerHTML = '';
+  document.getElementById('progress-wrap').style.display = 'none';
+  QUESTIONS = [];
+  if (isDailyMode) {
+    // daily 模式保持 weak 范围
+    sessionScope.mode = 'weak';
+    document.getElementById('progress-wrap').style.display = 'none';
+  }
+  startPractice(refresh);   // 直接再出一组(refresh=false 优先题库,秒出)
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

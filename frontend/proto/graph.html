@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识图谱 — 期末复习指挥舱</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0e1a;
+    --cyan:      #2de2e6;
+    --purple:    #a855f7;
+    --magenta:   #ff2d78;
+    --glass-bg:  rgba(10,20,50,.58);
+    --glass-border: rgba(45,226,230,.22);
+    --text:      #c8e6f8;
+    --text-dim:  #5a7fa0;
+    --radius:    16px;
+  }
+
+  html, body {
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: 'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── scanline ── */
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.07) 2px, rgba(0,0,0,.07) 4px);
+    pointer-events: none; z-index: 1000;
+    animation: scanMove 8s linear infinite;
+  }
+  @keyframes scanMove { 0%{ background-position:0 0;} 100%{background-position:0 80px;} }
+
+  /* ── App shell ── */
+  #app { position: relative; z-index: 2; height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── NAV ── */
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; height: 54px; flex-shrink: 0;
+    background: rgba(10,14,26,.88); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 0 20px rgba(45,226,230,.06);
+  }
+  .nav-brand {
+    font-size: 1.1rem; font-weight: 700; letter-spacing: .06em;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--magenta));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    filter: drop-shadow(0 0 6px rgba(45,226,230,.4)); white-space: nowrap;
+  }
+  .nav-links { display: flex; gap: 5px; }
+  .nav-links a {
+    color: var(--text-dim); text-decoration: none; padding: 5px 16px;
+    border-radius: 20px; font-size: .84rem; border: 1px solid transparent; transition: all .25s;
+  }
+  .nav-links a:hover, .nav-links a.active {
+    color: var(--cyan); border-color: var(--cyan);
+    background: rgba(45,226,230,.08); box-shadow: 0 0 10px rgba(45,226,230,.25);
+  }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+
+  /* ── 上传按钮 (Nav 右侧) ── */
+  .upload-btn-nav {
+    padding: 6px 16px; border-radius: 20px; font-size: .82rem; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all .22s;
+    background: linear-gradient(135deg, rgba(255,45,120,.15), rgba(168,85,247,.15));
+    border: 1px solid rgba(255,45,120,.45); color: var(--magenta);
+    box-shadow: 0 0 12px rgba(255,45,120,.2);
+  }
+  .upload-btn-nav:hover { background: linear-gradient(135deg, rgba(255,45,120,.25), rgba(168,85,247,.22)); box-shadow: 0 0 22px rgba(255,45,120,.4); }
+
+  /* ── 上传进度条（全局，收起时隐藏） ── */
+  #upload-banner {
+    flex-shrink: 0; position: relative; overflow: hidden;
+    padding: 10px 28px; display: none; align-items: center; gap: 16px;
+    background: linear-gradient(90deg, rgba(255,45,120,.07), rgba(168,85,247,.1), rgba(45,226,230,.07));
+    border-bottom: 1px solid rgba(168,85,247,.35);
+  }
+  #upload-banner.visible { display: flex; }
+  #upload-banner::before {
+    content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(168,85,247,.3), transparent);
+    animation: bannerScan 2.5s linear infinite;
+  }
+  @keyframes bannerScan { to { left: 130%; } }
+  .banner-text { flex: 1; font-size: .85rem; color: #c9a8f7; letter-spacing: .04em; }
+  .banner-prog-wrap { width: 140px; height: 4px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+  .banner-prog { height: 100%; width: 0%; background: linear-gradient(90deg, var(--magenta), var(--purple));
+    border-radius: 2px; transition: width .3s; box-shadow: 0 0 8px rgba(255,45,120,.5); }
+  .banner-pct { font-size: .78rem; color: var(--purple); min-width: 36px; }
+  .banner-close { background: none; border: 1px solid rgba(255,255,255,.15);
+    color: var(--text-dim); border-radius: 6px; padding: 3px 10px; font-size: .75rem; cursor: pointer; }
+  .banner-close:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  /* ── 筛选栏 ── */
+  #filter-bar {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    padding: 8px 20px; background: rgba(10,14,26,.7); border-bottom: 1px solid rgba(45,226,230,.1);
+    flex-wrap: wrap;
+  }
+  .filter-label { font-size: .7rem; color: var(--text-dim); letter-spacing: .1em; }
+  .chip {
+    padding: 4px 13px; border-radius: 20px; border: 1px solid rgba(45,226,230,.22);
+    font-size: .78rem; color: var(--text-dim); cursor: pointer; transition: all .2s;
+    background: transparent; font-family: inherit;
+  }
+  .chip:hover { color: var(--cyan); border-color: rgba(45,226,230,.5); }
+  .chip.active { color: var(--cyan); border-color: var(--cyan); background: rgba(45,226,230,.1); box-shadow: 0 0 8px rgba(45,226,230,.2); }
+  .filter-sep { width: 1px; height: 18px; background: rgba(45,226,230,.14); }
+
+  /* ── 主布局 ── */
+  #main-layout { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+  /* ── 图谱区 ── */
+  #graph-area { flex: 1; position: relative; overflow: hidden; }
+  #graphCanvas { display: block; cursor: default; }
+
+  /* ── 详情面板 ── */
+  #detail-panel {
+    width: 360px; min-width: 300px; flex-shrink: 0;
+    background: rgba(10,14,30,.85); backdrop-filter: blur(22px);
+    border-left: 1px solid rgba(45,226,230,.18);
+    box-shadow: -4px 0 32px rgba(45,226,230,.05);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .35s cubic-bezier(.25,.8,.25,1);
+    position: relative; overflow-y: auto; overflow-x: hidden;
+  }
+  #detail-panel.open { transform: translateX(0); }
+  #detail-panel::-webkit-scrollbar { width: 3px; }
+  #detail-panel::-webkit-scrollbar-thumb { background: rgba(45,226,230,.2); }
+
+  #detail-ph {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 14px; color: #2a3a5a; font-size: .85rem; letter-spacing: 1px;
+  }
+  .ph-icon { font-size: 3rem; opacity: .35; }
+
+  /* 详情内容 */
+  #detail-content { display: none; padding: 20px 20px 32px; }
+  #detail-content.visible { display: block; }
+
+  .det-title { font-size: 1.15rem; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+  .det-subj  { font-size: .7rem; color: #4a6a9a; letter-spacing: 1.5px; margin-bottom: 12px; text-transform: uppercase; }
+  .mastery-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .mastery-track { flex: 1; height: 6px; background: rgba(255,255,255,.07); border-radius: 3px; overflow: hidden; }
+  .mastery-fill { height: 100%; border-radius: 3px; transition: width .6s cubic-bezier(.25,.8,.25,1); }
+  .mastery-pct { font-size: .78rem; font-weight: 700; min-width: 36px; text-align: right; }
+
+  .det-section { margin-bottom: 16px; }
+  .det-sec-title {
+    font-size: .68rem; letter-spacing: 1.5px; color: #4a6a9a; text-transform: uppercase;
+    margin-bottom: 7px; border-bottom: 1px solid rgba(45,226,230,.1); padding-bottom: 4px;
+  }
+  .det-text { font-size: .83rem; line-height: 1.75; color: #99aad0; }
+
+  .q-item {
+    padding: 7px 11px; margin-bottom: 5px;
+    background: rgba(45,226,230,.04); border: 1px solid rgba(45,226,230,.12);
+    border-radius: 6px; font-size: .8rem; color: #8899bb; line-height: 1.5;
+  }
+  .wrong-item {
+    padding: 9px 11px; margin-bottom: 7px;
+    background: rgba(255,45,120,.05); border: 1px solid rgba(255,45,120,.2); border-radius: 6px;
+  }
+  .wrong-q   { font-size: .8rem; color: #8899bb; margin-bottom: 4px; }
+  .wrong-ans { font-size: .78rem; color: #ff6090; }
+  .right-ans { font-size: .78rem; color: var(--cyan); }
+
+  .ai-btn {
+    display: block; width: 100%; padding: 13px;
+    border-radius: 10px; border: 1px solid var(--purple);
+    background: rgba(168,85,247,.1); color: #c9a8f7;
+    font-size: .88rem; letter-spacing: 1px; cursor: pointer; transition: all .25s;
+    text-align: center; box-shadow: 0 0 16px rgba(168,85,247,.15);
+    animation: aiPulse 3s ease-in-out infinite; font-family: inherit;
+  }
+  @keyframes aiPulse { 0%,100%{ box-shadow:0 0 16px rgba(168,85,247,.2);} 50%{box-shadow:0 0 30px rgba(168,85,247,.5);} }
+  .ai-btn:hover { background: rgba(168,85,247,.22); color: #e0c8ff; transform: translateY(-1px); box-shadow: 0 0 36px rgba(168,85,247,.55); }
+
+  /* ── 下方分析报告区 ── */
+  #report-area {
+    flex-shrink: 0; border-top: 1px solid rgba(45,226,230,.12);
+    background: rgba(10,14,26,.7);
+    max-height: 0; overflow: hidden; transition: max-height .4s ease;
+  }
+  #report-area.open { max-height: 240px; overflow-y: auto; }
+  .report-toggle {
+    display: flex; align-items: center; gap: 8px; padding: 8px 20px;
+    cursor: pointer; font-size: .75rem; color: var(--text-dim);
+    border-top: 1px solid rgba(45,226,230,.1);
+    background: rgba(10,14,26,.6); user-select: none; flex-shrink: 0;
+    transition: color .2s;
+  }
+  .report-toggle:hover { color: var(--cyan); }
+  .report-inner { padding: 14px 20px 18px; }
+  .report-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 14px; }
+  .rep-card { padding: 12px 14px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+    border-radius: 12px; text-align: center; }
+  .rep-val { font-size: 1.5rem; font-weight: 800;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .rep-lbl { font-size: .65rem; color: var(--text-dim); letter-spacing: .08em; text-transform: uppercase; margin-top: 3px; }
+  .rep-weak { padding: 10px 14px; background: var(--glass-bg); border: 1px solid rgba(255,45,120,.2); border-radius: 10px; }
+  .rep-weak-title { font-size: .7rem; color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 7px; }
+  .weak-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .weak-chip {
+    padding: 3px 10px; border-radius: 10px; font-size: .75rem;
+    border: 1px solid rgba(255,45,120,.3); color: var(--magenta); background: rgba(255,45,120,.07);
+  }
+
+  /* ── 上传 Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(5,8,20,.82); backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: rgba(10,18,42,.96); border: 1px solid rgba(45,226,230,.4);
+    border-radius: 20px; padding: 34px 38px; width: min(480px, 92vw);
+    box-shadow: 0 0 60px rgba(45,226,230,.2); position: relative;
+  }
+  .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 18px;
+    background: linear-gradient(90deg, var(--magenta), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .drop-zone {
+    border: 2px dashed rgba(255,45,120,.3); border-radius: 12px;
+    padding: 38px 20px; text-align: center; cursor: pointer; transition: all .2s;
+    background: rgba(255,45,120,.03);
+  }
+  .drop-zone:hover { border-color: var(--magenta); background: rgba(255,45,120,.07); box-shadow: 0 0 18px rgba(255,45,120,.12); }
+  .dz-icon { font-size: 2.4rem; margin-bottom: 10px; }
+  .dz-text { font-size: .9rem; color: var(--text-dim); }
+  .dz-hint { font-size: .73rem; color: var(--text-dim); margin-top: 6px; }
+  .modal-close { position: absolute; top: 14px; right: 18px; background: none; border: none;
+    color: var(--text-dim); font-size: 1.2rem; cursor: pointer; transition: color .2s; }
+  .modal-close:hover { color: var(--cyan); }
+  #upload-status { margin-top: 12px; font-size: .82rem; color: var(--text-dim); text-align: center; }
+
+  /* ── float anim ── */
+  @keyframes floatY { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-5px);} }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── NAV ── -->
+  <nav>
+    <div class="nav-brand">⚡ 期末复习指挥舱</div>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="graph.html" class="active">知识图谱</a>
+      <a href="teacher.html">AI 老师</a>
+    </div>
+    <div class="nav-right">
+      <button class="upload-btn-nav" onclick="openUpload()">📤 上传试卷 / 错题</button>
+    </div>
+  </nav>
+
+  <!-- ── 上传进度条 banner ── -->
+  <div id="upload-banner">
+    <span class="banner-text">⚡ 正在分析试卷… 知识图谱和薄弱点稍后更新</span>
+    <div class="banner-prog-wrap"><div class="banner-prog" id="banner-prog"></div></div>
+    <span class="banner-pct" id="banner-pct">0%</span>
+    <button class="banner-close" onclick="closeBanner()">✕</button>
+  </div>
+
+  <!-- ── 筛选栏 ── -->
+  <div id="filter-bar">
+    <span class="filter-label">科目</span>
+    <button class="chip active" data-group="subject" data-val="全部">全部</button>
+    <button class="chip" data-group="subject" data-val="数学">数学</button>
+    <button class="chip" data-group="subject" data-val="语文">语文</button>
+    <button class="chip" data-group="subject" data-val="英语">英语</button>
+    <button class="chip" data-group="subject" data-val="科学">科学</button>
+    <div class="filter-sep"></div>
+    <span class="filter-label">掌握度</span>
+    <button class="chip active" data-group="mastery" data-val="全部">全部</button>
+    <button class="chip" data-group="mastery" data-val="薄弱">薄弱</button>
+    <button class="chip" data-group="mastery" data-val="中等">中等</button>
+    <button class="chip" data-group="mastery" data-val="掌握">掌握</button>
+  </div>
+
+  <!-- ── 主布局 ── -->
+  <div id="main-layout">
+    <div id="graph-area"><canvas id="graphCanvas"></canvas></div>
+    <div id="detail-panel">
+      <div id="detail-ph">
+        <div class="ph-icon">◈</div>
+        <div>← 点击节点查看详情</div>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- ── 分析报告切换 ── -->
+  <div class="report-toggle" onclick="toggleReport()" id="report-toggle">
+    <span id="report-arrow">▲</span> 全局分析报告
+  </div>
+  <div id="report-area">
+    <div class="report-inner">
+      <div class="report-grid">
+        <div class="rep-card"><div class="rep-val">247</div><div class="rep-lbl">已分析题目</div></div>
+        <div class="rep-card"><div class="rep-val" style="background:linear-gradient(135deg,#ff2d78,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">12</div><div class="rep-lbl">薄弱知识点</div></div>
+        <div class="rep-card"><div class="rep-val">78%</div><div class="rep-lbl">综合掌握度</div></div>
+        <div class="rep-card"><div class="rep-val" style="background:linear-gradient(135deg,#f59e0b,#10b981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">3%</div><div class="rep-lbl">超纲比例</div></div>
+      </div>
+      <div class="rep-weak">
+        <div class="rep-weak-title">⚠ AI 总结薄弱点</div>
+        <div class="weak-chips">
+          <span class="weak-chip">分数乘除法 30%</span>
+          <span class="weak-chip">方程未知数 44%</span>
+          <span class="weak-chip">科学实验 40%</span>
+          <span class="weak-chip">分数加减 45%</span>
+          <span class="weak-chip">时间速度 58%</span>
+          <span class="weak-chip">统计图表 68%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ── 上传 Modal ── -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeUploadOutside(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeUpload()">✕</button>
+    <div class="modal-title">📤 上传试卷 / 错题本</div>
+    <div class="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="dz-icon">📁</div>
+      <div class="dz-text">拍照上传 或 点击选择文件</div>
+      <div class="dz-hint">支持 JPG、PNG 照片或 PDF 文件，最大 20MB，可多选</div>
+    </div>
+    <input type="file" id="file-input" accept="image/*,.pdf" multiple style="display:none" onchange="handleFile(this)"/>
+    <div id="upload-status"></div>
+  </div>
+</div>
+
+<script>
+/* ─── 数据 ─── */
+const NODES = [
+  { id:0, label:'分数加减法', subject:'数学', mastery:0.45, x:0.18, y:0.28 },
+  { id:1, label:'分数乘除法', subject:'数学', mastery:0.30, x:0.30, y:0.44 },
+  { id:2, label:'小数运算',   subject:'数学', mastery:0.72, x:0.18, y:0.60 },
+  { id:3, label:'方程与未知数',subject:'数学', mastery:0.55, x:0.42, y:0.30 },
+  { id:4, label:'面积与周长', subject:'数学', mastery:0.85, x:0.42, y:0.68 },
+  { id:5, label:'统计与图表', subject:'数学', mastery:0.68, x:0.58, y:0.48 },
+  { id:6, label:'古诗鉴赏',   subject:'语文', mastery:0.90, x:0.72, y:0.20 },
+  { id:7, label:'阅读理解',   subject:'语文', mastery:0.65, x:0.72, y:0.55 },
+  { id:8, label:'英语词汇',   subject:'英语', mastery:0.78, x:0.85, y:0.35 },
+  { id:9, label:'科学实验',   subject:'科学', mastery:0.40, x:0.85, y:0.70 },
+  { id:10,label:'时间与速度', subject:'数学', mastery:0.58, x:0.58, y:0.80 },
+];
+const EDGES = [[0,1],[0,2],[1,3],[2,4],[2,10],[3,5],[4,5],[5,10],[6,7],[7,5],[8,6],[8,7],[9,5],[9,10]];
+const NODE_DETAIL = {
+  0:{ explain:'分数加减法：同分母直接加减分子；异分母先通分（取最小公倍数）再计算。注意化简到最简分数，整数与分数混合时先转假分数。', questions:['1/3 + 1/4 = ？','5/6 − 2/9 = ？','小明有 3/5 块蛋糕，吃掉 1/4 块，还剩多少？'], wrong:[{q:'2/3 + 3/4 = ？',wa:'你的答案：5/7 ✗',ra:'正确答案：17/12 = 1又5/12'},{q:'7/8 − 1/6 = ？',wa:'你的答案：6/2 ✗',ra:'正确答案：17/24'}] },
+  1:{ explain:'分数乘除法：乘法分子×分子、分母×分母，能约分先约分；除法把除号变乘号、除数取倒数。口诀：「除以一个数 = 乘以它的倒数」。', questions:['2/3 × 3/4 = ？','5/8 ÷ 5/16 = ？','一根绳子 5/6 米，剪成每段 5/18 米，共几段？'], wrong:[{q:'3/4 ÷ 2/5 = ？',wa:'你的答案：6/20 ✗',ra:'正确答案：15/8 = 1又7/8'},{q:'2/3 × 9/4 = ？',wa:'你的答案：18/12 = 1.5 ✗',ra:'正确答案：3/2（交叉约分更简便）'}] },
+  6:{ explain:'古诗鉴赏：理解诗歌意象、意境与情感。注意诗题背景、重要意象（月=思乡、松=高洁），体会押韵与对仗的音乐美，结合时代背景分析情感。', questions:['《静夜思》"举头望明月"下一句？','「春眠不觉晓」出自哪首诗？作者是谁？','解释「野旷天低树，江清月近人」意境。'], wrong:[{q:'「两个黄鹂鸣翠柳」下一句？',wa:'你的答案：一行白鹭入云来 ✗',ra:'正确答案：一行白鹭上青天'}] }
+};
+function getDefaultDetail(node) {
+  return {
+    explain:`${node.label}是${node.subject}课程中的重要知识点。建议理解基本概念、熟悉解题方法，通过练习强化记忆，重点关注易错点和典型题型。`,
+    questions:[`${node.label} 基础练习题第1题（示例）`,`${node.label} 综合应用题第2题（示例）`,`${node.label} 拓展思维题第3题（示例）`],
+    wrong:[{q:`${node.label}易错题示例`,wa:'你的答案：错误选项 ✗',ra:'正确答案：正确选项'}]
+  };
+}
+
+/* ─── 筛选 ─── */
+let activeFilters = { subject:'全部', mastery:'全部' };
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', function() {
+    const g = this.dataset.group, v = this.dataset.val;
+    if (!g) return;
+    document.querySelectorAll(`.chip[data-group="${g}"]`).forEach(c=>c.classList.remove('active'));
+    this.classList.add('active');
+    activeFilters[g] = v;
+  });
+});
+function masteryCategory(m) {
+  if (m < 0.60) return '薄弱'; if (m < 0.76) return '中等'; return '掌握';
+}
+
+/* ─── 图谱 Canvas ─── */
+const graphCanvas = document.getElementById('graphCanvas');
+const gctx = graphCanvas.getContext('2d');
+const graphArea = document.getElementById('graph-area');
+const NODE_R = 40;
+let selectedNode = null, animT = 0;
+
+function nodeColor(m) {
+  if (m < 0.60) return { core:'#ff2d78', glow:'rgba(255,45,120,' };
+  if (m < 0.76) return { core:'#f59e0b', glow:'rgba(245,158,11,' };
+  return { core:'#2de2e6', glow:'rgba(45,226,230,' };
+}
+function resizeGraph() {
+  graphCanvas.width  = graphArea.clientWidth;
+  graphCanvas.height = graphArea.clientHeight;
+}
+function nodeScreenPos(n) {
+  return { x: n.x * graphCanvas.width, y: n.y * graphCanvas.height };
+}
+function splitLabel(str, max) {
+  if (str.length <= max) return [str];
+  const mid = Math.ceil(str.length / 2); return [str.slice(0,mid), str.slice(mid)];
+}
+
+function drawGraph(t) {
+  const W = graphCanvas.width, H = graphCanvas.height;
+  gctx.clearRect(0, 0, W, H);
+
+  // 过滤
+  NODES.forEach(n => {
+    const sOk = activeFilters.subject === '全部' || n.subject === activeFilters.subject;
+    const mOk = activeFilters.mastery === '全部' || masteryCategory(n.mastery) === activeFilters.mastery;
+    n.hidden = !(sOk && mOk);
+  });
+
+  // 边
+  EDGES.forEach(([a,b]) => {
+    const na=NODES[a], nb=NODES[b]; if(na.hidden||nb.hidden) return;
+    const pa=nodeScreenPos(na), pb=nodeScreenPos(nb);
+    gctx.save();
+    const g = gctx.createLinearGradient(pa.x,pa.y,pb.x,pb.y);
+    g.addColorStop(0,'rgba(45,226,230,0.20)'); g.addColorStop(0.5,'rgba(168,85,247,0.14)'); g.addColorStop(1,'rgba(45,226,230,0.20)');
+    gctx.beginPath(); gctx.moveTo(pa.x,pa.y); gctx.lineTo(pb.x,pb.y);
+    gctx.strokeStyle=g; gctx.lineWidth=1.5; gctx.setLineDash([6,6]);
+    gctx.lineDashOffset = -(t*20)%24; gctx.stroke(); gctx.restore();
+  });
+
+  // 节点
+  NODES.forEach(node => {
+    if (node.hidden) return;
+    const pos=nodeScreenPos(node), col=nodeColor(node.mastery);
+    const isSel = selectedNode && selectedNode.id === node.id;
+    const pulse = 0.5 + 0.5*Math.sin(t*1.6+node.id*0.7);
+    gctx.save();
+    // 光晕
+    const glowR = NODE_R+16+(isSel?14:pulse*7);
+    const rg = gctx.createRadialGradient(pos.x,pos.y,NODE_R*0.4,pos.x,pos.y,glowR);
+    rg.addColorStop(0, col.glow+(isSel?0.65:0.22+pulse*0.15)+')');
+    rg.addColorStop(1, col.glow+'0)');
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,glowR,0,Math.PI*2); gctx.fillStyle=rg; gctx.fill();
+    // 圆填充
+    const rf = gctx.createRadialGradient(pos.x-NODE_R*0.3,pos.y-NODE_R*0.3,4,pos.x,pos.y,NODE_R);
+    rf.addColorStop(0,col.glow+'0.30)'); rf.addColorStop(1,'rgba(10,14,26,0.90)');
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,NODE_R,0,Math.PI*2); gctx.fillStyle=rf; gctx.fill();
+    // 边框
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,NODE_R,0,Math.PI*2);
+    gctx.strokeStyle=isSel?col.core:col.glow+(0.5+pulse*0.3)+')';
+    gctx.lineWidth=isSel?2.5:1.5;
+    if(isSel){gctx.shadowBlur=20;gctx.shadowColor=col.core;}
+    gctx.stroke(); gctx.shadowBlur=0;
+    // 掌握度弧
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,NODE_R-5,-Math.PI/2,-Math.PI/2+node.mastery*2*Math.PI);
+    gctx.strokeStyle=col.core; gctx.lineWidth=2.5; gctx.setLineDash([]); gctx.stroke();
+    // 文字
+    const lines=splitLabel(node.label,5);
+    gctx.font=`bold ${lines.length>1?10:11}px PingFang SC, Microsoft YaHei, sans-serif`;
+    gctx.textAlign='center'; gctx.textBaseline='middle'; gctx.fillStyle='#e0e8ff';
+    gctx.shadowBlur=8; gctx.shadowColor=col.core;
+    const lh=14, sy=pos.y-((lines.length-1)*lh)/2;
+    lines.forEach((l,i)=>gctx.fillText(l,pos.x,sy+i*lh));
+    gctx.shadowBlur=0;
+    gctx.font='9px monospace'; gctx.fillStyle=col.glow+'0.88)';
+    gctx.shadowBlur=4; gctx.shadowColor=col.core;
+    gctx.fillText(Math.round(node.mastery*100)+'%',pos.x,pos.y+NODE_R+10);
+    gctx.shadowBlur=0; gctx.restore();
+  });
+}
+
+graphCanvas.addEventListener('click', function(e) {
+  const rect=graphCanvas.getBoundingClientRect(), mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  let hit=null;
+  for(const n of NODES){ if(n.hidden)continue; const p=nodeScreenPos(n),dx=mx-p.x,dy=my-p.y; if(dx*dx+dy*dy<=NODE_R*NODE_R){hit=n;break;} }
+  selectedNode=hit; if(hit) openDetail(hit);
+});
+graphCanvas.addEventListener('mousemove', function(e) {
+  const rect=graphCanvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  let over=false;
+  for(const n of NODES){ if(n.hidden)continue; const p=nodeScreenPos(n),dx=mx-p.x,dy=my-p.y; if(dx*dx+dy*dy<=NODE_R*NODE_R){over=true;break;} }
+  graphCanvas.style.cursor=over?'pointer':'default';
+});
+
+function loop(ts){ animT=ts/1000; drawGraph(animT); requestAnimationFrame(loop); }
+window.addEventListener('resize',()=>{ resizeGraph(); });
+resizeGraph(); requestAnimationFrame(loop);
+
+/* ─── 详情面板 ─── */
+const detailPanel=document.getElementById('detail-panel');
+const detailPH=document.getElementById('detail-ph');
+const detailContent=document.getElementById('detail-content');
+
+function colCSS(m){ if(m<0.60)return'#ff2d78'; if(m<0.76)return'#f59e0b'; return'#2de2e6'; }
+function mlabel(m){ if(m<0.60)return'薄弱'; if(m<0.76)return'中等'; return'掌握'; }
+
+function openDetail(node) {
+  const data=NODE_DETAIL[node.id]||getDefaultDetail(node);
+  const col=colCSS(node.mastery), pct=Math.round(node.mastery*100);
+  const qHTML=data.questions.map(q=>`<div class="q-item">● ${esc(q)}</div>`).join('');
+  const wHTML=data.wrong.map(w=>`<div class="wrong-item"><div class="wrong-q">Q：${esc(w.q)}</div><div class="wrong-ans">${esc(w.wa)}</div><div class="right-ans">${esc(w.ra)}</div></div>`).join('');
+  detailContent.innerHTML=`
+    <div class="det-title" style="color:${col};text-shadow:0 0 10px ${col}">${esc(node.label)}</div>
+    <div class="det-subj">${node.subject}</div>
+    <div class="mastery-row">
+      <div class="mastery-track"><div class="mastery-fill" style="width:${pct}%;background:${col};box-shadow:0 0 6px ${col}"></div></div>
+      <div class="mastery-pct" style="color:${col}">${pct}%</div>
+      <div style="font-size:.7rem;color:${col}">${mlabel(node.mastery)}</div>
+    </div>
+    <div class="det-section"><div class="det-sec-title">📖 知识点详解</div><div class="det-text">${esc(data.explain)}</div></div>
+    <div class="det-section"><div class="det-sec-title">📝 出过的题目</div>${qHTML}</div>
+    <div class="det-section"><div class="det-sec-title">❌ 做错过的题目</div>${wHTML}</div>
+    <div class="det-section"><div class="det-sec-title">🤖 AI 辅导</div>
+      <button class="ai-btn" onclick="askAI('${esc(node.label)}')">🤖 找 AI 老师讨论这个知识点</button>
+    </div>`;
+  detailPH.style.display='none';
+  detailContent.classList.add('visible');
+  detailPanel.classList.add('open');
+}
+function askAI(topic) { window.location='teacher.html?topic='+encodeURIComponent(topic); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+detailPanel.addEventListener('transitionend',()=>resizeGraph());
+
+/* ─── 报告区 toggle ─── */
+let reportOpen=false;
+function toggleReport(){
+  reportOpen=!reportOpen;
+  document.getElementById('report-area').classList.toggle('open',reportOpen);
+  document.getElementById('report-arrow').textContent=reportOpen?'▼':'▲';
+}
+
+/* ─── 上传 Modal ─── */
+function openUpload(){ document.getElementById('modal-overlay').classList.add('open'); }
+function closeUpload(){ document.getElementById('modal-overlay').classList.remove('open'); document.getElementById('upload-status').textContent=''; }
+function closeUploadOutside(e){ if(e.target===document.getElementById('modal-overlay'))closeUpload(); }
+
+function handleFile(input){
+  if(!input.files||!input.files.length)return;
+  const names=Array.from(input.files).map(f=>f.name).join('、');
+  document.getElementById('upload-status').innerHTML=`<span style="color:var(--cyan)">⚡ 已选择：${esc(names)} — 开始演示上传</span>`;
+  closeUpload();
+  startFakeUpload();
+}
+
+function startFakeUpload(){
+  const banner=document.getElementById('upload-banner');
+  const prog=document.getElementById('banner-prog');
+  const pct=document.getElementById('banner-pct');
+  banner.classList.add('visible');
+  let p=0;
+  const iv=setInterval(()=>{
+    p=Math.min(p+(Math.random()*6+2),100);
+    prog.style.width=p+'%'; pct.textContent=Math.round(p)+'%';
+    if(p>=100){ clearInterval(iv); pct.textContent='完成 ✓'; prog.style.background='linear-gradient(90deg,#4ade80,#2de2e6)'; }
+  },120);
+}
+function closeBanner(){ document.getElementById('upload-banner').classList.remove('visible'); }
+
+/* 拖放支持 */
+(function(){
+  const dz=document.querySelector('.drop-zone');
+  if(!dz)return;
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--magenta)';});
+  dz.addEventListener('dragleave',()=>{dz.style.borderColor='';});
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';
+    const f=e.dataTransfer.files[0];if(f){document.getElementById('upload-status').innerHTML=`<span style="color:var(--cyan)">⚡ 已选择：${esc(f.name)} — 演示模式</span>`;closeUpload();startFakeUpload();}
+  });
+})();
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

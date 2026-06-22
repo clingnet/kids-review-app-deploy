@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>我的学习舱 — 期末复习指挥舱</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0a0e1a;
+      --cyan:      #2de2e6;
+      --purple:    #a855f7;
+      --magenta:   #ff2d78;
+      --glass-bg:  rgba(10,20,50,.58);
+      --glass-border: rgba(45,226,230,.22);
+      --text:      #c8e6f8;
+      --text-dim:  #5a7fa0;
+      --radius:    16px;
+    }
+    html, body {
+      height: 100%; background: var(--bg); color: var(--text);
+      font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      overflow-x: hidden;
+    }
+    /* 安全区：顶部导航适配刘海屏 */
+    nav {
+      padding-top: max(14px, env(safe-area-inset-top));
+    }
+    .scanlines {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,.07) 3px, rgba(0,0,0,.07) 4px);
+      animation: scanMove 6s linear infinite; opacity: .4;
+    }
+    @keyframes scanMove { from { background-position: 0 0; } to { background-position: 0 80px; } }
+    #app { position: relative; z-index: 2; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 32px; background: rgba(10,14,26,.88); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--glass-border); position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand {
+      font-size: 1.2rem; font-weight: 700; letter-spacing: .08em;
+      background: linear-gradient(90deg, var(--cyan), var(--purple), var(--magenta));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      filter: drop-shadow(0 0 6px rgba(45,226,230,.5));
+    }
+    .nav-links { display: flex; gap: 6px; }
+    .nav-links a {
+      color: var(--text-dim); text-decoration: none; padding: 6px 18px;
+      border-radius: 20px; font-size: .85rem; border: 1px solid transparent; transition: all .25s;
+    }
+    .nav-links a:hover, .nav-links a.active {
+      color: var(--cyan); border-color: var(--cyan);
+      background: rgba(45,226,230,.08); box-shadow: 0 0 12px rgba(45,226,230,.3);
+    }
+    .nav-status { display: flex; align-items: center; gap: 16px; font-size: .78rem; }
+    .status-item { color: var(--text-dim); }
+    .status-item span { color: var(--cyan); }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple), var(--magenta));
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 700; color: #fff;
+      box-shadow: 0 0 10px rgba(168,85,247,.5);
+    }
+    /* 分析中 Banner */
+    #analysis-banner {
+      display: none; align-items: center; gap: 14px;
+      padding: 8px 28px;
+      background: linear-gradient(90deg, rgba(168,85,247,.07), rgba(45,226,230,.07));
+      border-bottom: 1px solid rgba(168,85,247,.3);
+      position: relative; overflow: hidden;
+    }
+    #analysis-banner.visible { display: flex; }
+    #analysis-banner::before {
+      content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(168,85,247,.25), transparent);
+      animation: bannerScan 2.5s linear infinite;
+    }
+    @keyframes bannerScan { to { left: 130%; } }
+    .banner-text { flex: 1; font-size: .82rem; color: #c9a8f7; }
+    .banner-close { background: none; border: 1px solid rgba(255,255,255,.15);
+      color: var(--text-dim); border-radius: 6px; padding: 2px 8px; font-size: .72rem; cursor: pointer; }
+    main { flex: 1; padding: 28px 32px 56px; max-width: 1200px; margin: 0 auto; width: 100%; }
+    .section-title {
+      font-size: .7rem; text-transform: uppercase; letter-spacing: .18em;
+      color: var(--text-dim); margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--glass-border), transparent); }
+    .card {
+      background: var(--glass-bg); backdrop-filter: blur(18px);
+      border: 1px solid var(--glass-border); border-radius: var(--radius);
+      transition: transform .3s, box-shadow .3s, border-color .3s;
+      position: relative; overflow: hidden; animation: glowPulse 4s ease-in-out infinite;
+    }
+    .card::before {
+      content: ''; position: absolute; inset: 0; border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(45,226,230,.04), transparent 60%); pointer-events: none;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 0 28px rgba(45,226,230,.2), 0 10px 36px rgba(0,0,0,.4);
+      border-color: rgba(45,226,230,.4); animation: none;
+    }
+    @keyframes glowPulse {
+      0%,100% { box-shadow: 0 0 6px rgba(45,226,230,.08); }
+      50%      { box-shadow: 0 0 18px rgba(45,226,230,.18); }
+    }
+    .hud-row { display: grid; grid-template-columns: 1.1fr 1fr 1.7fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .widget { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; }
+    .widget-label { font-size: .68rem; color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase; }
+    .widget-value {
+      font-size: 2rem; font-weight: 800; line-height: 1;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      filter: drop-shadow(0 0 6px rgba(45,226,230,.4));
+    }
+    .widget-sub { font-size: .72rem; color: var(--text-dim); }
+    .ring-wrap { position: relative; width: 80px; height: 80px; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg   { fill: none; stroke: rgba(45,226,230,.12); stroke-width: 7; }
+    .ring-fill {
+      fill: none; stroke: url(#ringGrad); stroke-width: 7; stroke-linecap: round;
+      stroke-dasharray: 220; stroke-dashoffset: 220;
+      filter: drop-shadow(0 0 5px var(--cyan)); transition: stroke-dashoffset 1s ease-out;
+    }
+    .ring-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .88rem; font-weight: 800; color: var(--cyan); }
+    .subj-bars { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+    .subj-row  { display: flex; align-items: center; gap: 6px; font-size: .68rem; }
+    .subj-name { width: 24px; color: var(--text-dim); flex-shrink: 0; text-align: right; }
+    .bar-track { flex: 1; height: 5px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+    .bar-fill  { height: 100%; border-radius: 3px; transition: width .8s ease-out; }
+    .bar-pct { width: 28px; color: var(--text-dim); flex-shrink: 0; }
+    .trend-wrap { padding: 16px 14px 10px; }
+    .trend-label { font-size: .68rem; color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 8px; }
+    .sparkline { width: 100%; height: 56px; }
+    .widget.warn .widget-value { background: linear-gradient(135deg, var(--magenta), #ff6fa0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .warn-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--magenta); animation: warnPulse 1.5s ease-in-out infinite; }
+    @keyframes warnPulse { 0%,100% { box-shadow: 0 0 4px var(--magenta); } 50% { box-shadow: 0 0 16px var(--magenta), 0 0 30px rgba(255,45,120,.4); } }
+    .badges-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .badge { font-size: .7rem; padding: 3px 8px; border-radius: 10px; border: 1px solid rgba(45,226,230,.3); background: rgba(45,226,230,.07); color: var(--cyan); white-space: nowrap; }
+    .badge.purple { border-color: rgba(168,85,247,.3); background: rgba(168,85,247,.07); color: var(--purple); }
+    .badge.magenta { border-color: rgba(255,45,120,.3); background: rgba(255,45,120,.07); color: var(--magenta); }
+    .streak-ring {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; font-weight: 900; color: #0a0e1a;
+      box-shadow: 0 0 16px rgba(45,226,230,.4); animation: streakPulse 2s ease-in-out infinite;
+    }
+    @keyframes streakPulse { 0%,100% { box-shadow: 0 0 12px rgba(45,226,230,.3); } 50% { box-shadow: 0 0 24px rgba(45,226,230,.6), 0 0 40px rgba(168,85,247,.3); } }
+    .recommend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .rec-card { padding: 20px 18px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; }
+    .rec-card.cyan  { border-color: rgba(45,226,230,.3); }
+    .rec-card.cyan:hover  { border-color: var(--cyan); box-shadow: 0 0 28px rgba(45,226,230,.25), 0 10px 30px rgba(0,0,0,.4); animation: none; }
+    .rec-card.purple { border-color: rgba(168,85,247,.3); }
+    .rec-card.purple:hover { border-color: var(--purple); box-shadow: 0 0 28px rgba(168,85,247,.25), 0 10px 30px rgba(0,0,0,.4); animation: none; }
+    .rec-card.magenta { border-color: rgba(255,45,120,.3); }
+    .rec-card.magenta:hover { border-color: var(--magenta); box-shadow: 0 0 28px rgba(255,45,120,.25), 0 10px 30px rgba(0,0,0,.4); animation: none; }
+    .rec-subj { font-size: .68rem; text-transform: uppercase; letter-spacing: .12em; padding: 2px 8px; border-radius: 8px; display: inline-block; width: fit-content; }
+    .rec-subj.cyan    { color: var(--cyan); background: rgba(45,226,230,.1); border: 1px solid rgba(45,226,230,.25); }
+    .rec-subj.purple  { color: var(--purple); background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.25); }
+    .rec-subj.magenta { color: var(--magenta); background: rgba(255,45,120,.1); border: 1px solid rgba(255,45,120,.25); }
+    .rec-title { font-size: .95rem; font-weight: 700; color: #dff0ff; }
+    .rec-reason { font-size: .78rem; color: var(--text-dim); line-height: 1.5; }
+    .rec-action { margin-top: auto; font-size: .78rem; padding: 5px 14px; border-radius: 12px; border: 1px solid; display: inline-block; width: fit-content; transition: all .2s; cursor: pointer; }
+    .rec-card.cyan   .rec-action { color: var(--cyan);    border-color: rgba(45,226,230,.4); }
+    .rec-card.purple .rec-action { color: var(--purple);  border-color: rgba(168,85,247,.4); }
+    .rec-card.magenta .rec-action { color: var(--magenta); border-color: rgba(255,45,120,.4); }
+    .weak-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+    .weak-item { padding: 14px 20px; display: flex; align-items: center; gap: 16px; }
+    .weak-subj { font-size: .7rem; width: 32px; text-align: center; padding: 4px 6px; border-radius: 8px; flex-shrink: 0; border: 1px solid; font-weight: 600; }
+    .weak-subj.m { color: var(--magenta); border-color: rgba(255,45,120,.3); background: rgba(255,45,120,.08); }
+    .weak-subj.o { color: var(--purple);  border-color: rgba(168,85,247,.3); background: rgba(168,85,247,.08); }
+    .weak-subj.s { color: var(--cyan);    border-color: rgba(45,226,230,.3); background: rgba(45,226,230,.08); }
+    .weak-info { flex: 1; }
+    .weak-name { font-size: .9rem; color: #dff0ff; font-weight: 600; }
+    .weak-bar-wrap { width: 120px; height: 5px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; margin-top: 5px; }
+    .weak-bar { height: 100%; border-radius: 3px; transition: width .8s ease-out; }
+    .weak-pct { font-size: .72rem; margin-top: 3px; }
+    .weak-btns { display: flex; gap: 8px; flex-shrink: 0; }
+    .weak-btn { padding: 5px 12px; border-radius: 10px; font-size: .75rem; cursor: pointer; font-family: inherit; transition: all .2s; border: 1px solid; background: transparent; }
+    .weak-btn.study { color: var(--cyan); border-color: rgba(45,226,230,.35); }
+    .weak-btn.study:hover { background: rgba(45,226,230,.12); box-shadow: 0 0 8px rgba(45,226,230,.25); }
+    .weak-btn.ask { color: var(--purple); border-color: rgba(168,85,247,.35); }
+    .weak-btn.ask:hover { background: rgba(168,85,247,.12); box-shadow: 0 0 8px rgba(168,85,247,.25); }
+    .weak-btn:disabled { opacity: .5; cursor: default; }
+    /* 每日一练卡片 */
+    .daily-card {
+      margin-bottom: 16px; padding: 24px 28px; align-items: center; gap: 24px;
+      cursor: pointer; text-decoration: none;
+      border-color: rgba(45,226,230,.45);
+      background: linear-gradient(135deg, rgba(45,226,230,.10), rgba(168,85,247,.08), rgba(45,226,230,.04));
+      position: relative; overflow: hidden;
+    }
+    .daily-card::after {
+      content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(45,226,230,.15), transparent);
+      animation: dailyScan 3s linear infinite;
+    }
+    @keyframes dailyScan { to { left: 130%; } }
+    .daily-card:hover { border-color: var(--cyan); box-shadow: 0 0 40px rgba(45,226,230,.30), 0 10px 30px rgba(0,0,0,.4); animation: none; }
+    .daily-card:hover::after { display: none; }
+    .daily-icon { font-size: 2.6rem; flex-shrink: 0; filter: drop-shadow(0 0 14px var(--cyan)); animation: floatIcon 3s ease-in-out infinite; }
+    .daily-body { flex: 1; }
+    .daily-title {
+      font-size: 1.35rem; font-weight: 900; color: #fff; margin-bottom: 6px;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      filter: drop-shadow(0 0 8px rgba(45,226,230,.4));
+    }
+    .daily-desc { font-size: .85rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 6px; }
+    .daily-streak { font-size: .8rem; color: var(--text-dim); }
+    .daily-cta {
+      padding: 11px 26px; border-radius: 20px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #0a0e1a; font-weight: 800; font-size: .95rem; flex-shrink: 0; white-space: nowrap;
+      box-shadow: 0 0 22px rgba(45,226,230,.45);
+    }
+    .practice-banner {
+      margin-bottom: 24px; padding: 28px 32px; display: flex; align-items: center; gap: 28px;
+      cursor: pointer; text-decoration: none;
+      border-color: rgba(168,85,247,.4);
+      background: linear-gradient(135deg, rgba(168,85,247,.08), rgba(45,226,230,.05));
+    }
+    .practice-banner:hover { border-color: var(--purple); box-shadow: 0 0 36px rgba(168,85,247,.25), 0 10px 30px rgba(0,0,0,.4); animation: none; }
+    .practice-icon { font-size: 2.8rem; flex-shrink: 0; filter: drop-shadow(0 0 12px var(--purple)); animation: floatIcon 3.5s ease-in-out infinite; }
+    @keyframes floatIcon { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    .practice-body { flex: 1; }
+    .practice-title { font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 6px; background: linear-gradient(90deg, var(--purple), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .practice-desc { font-size: .85rem; color: var(--text-dim); line-height: 1.6; }
+    .practice-cta { padding: 10px 24px; border-radius: 20px; background: linear-gradient(135deg, var(--purple), var(--cyan)); color: #0a0e1a; font-weight: 700; font-size: .9rem; flex-shrink: 0; white-space: nowrap; box-shadow: 0 0 20px rgba(168,85,247,.4); }
+    .activity-list { display: flex; flex-direction: column; gap: 10px; }
+    .activity-item { padding: 14px 18px; display: flex; align-items: center; gap: 14px; }
+    .act-icon { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+    .act-icon.cyan-bg    { background: rgba(45,226,230,.12); border: 1px solid rgba(45,226,230,.25); }
+    .act-icon.purple-bg  { background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.25); }
+    .act-icon.magenta-bg { background: rgba(255,45,120,.12); border: 1px solid rgba(255,45,120,.25); }
+    .act-body { flex: 1; }
+    .act-title { font-size: .88rem; color: #d0e8f8; }
+    .act-sub   { font-size: .75rem; color: var(--text-dim); margin-top: 2px; }
+    .act-time  { font-size: .72rem; color: var(--text-dim); white-space: nowrap; }
+    .act-badge { font-size: .7rem; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+    .badge-done { background: rgba(45,226,230,.1); color: var(--cyan); border: 1px solid rgba(45,226,230,.25); }
+    /* 讲解弹窗 */
+    .modal-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(5,8,20,.85); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .3s; }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal { background: rgba(10,18,42,.96); border: 1px solid rgba(45,226,230,.4); border-radius: 20px; padding: 32px 36px; width: min(580px, 92vw); box-shadow: 0 0 60px rgba(45,226,230,.2); position: relative; max-height: 80vh; overflow-y: auto; }
+    .modal::-webkit-scrollbar { width: 3px; }
+    .modal::-webkit-scrollbar-thumb { background: rgba(45,226,230,.2); }
+    .modal-close { position: absolute; top: 14px; right: 18px; background: none; border: none; color: var(--text-dim); font-size: 1.2rem; cursor: pointer; transition: color .2s; }
+    .modal-close:hover { color: var(--cyan); }
+    .modal-title { font-size: 1rem; font-weight: 700; margin-bottom: 16px; background: linear-gradient(90deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .modal-body { font-size: .86rem; color: var(--text-dim); line-height: 1.8; }
+    .modal-body strong { color: var(--cyan); }
+    .practice-block { margin-top: 14px; padding: 12px; border-radius: 10px; border: 1px solid rgba(45,226,230,.15); background: rgba(45,226,230,.04); }
+    .practice-block .stem { font-size: .88rem; color: #d0e8f8; margin-bottom: 6px; }
+    .practice-block .ans  { font-size: .8rem; color: #4ade80; }
+    .practice-block .exp  { font-size: .78rem; color: var(--text-dim); margin-top: 4px; }
+    .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(45,226,230,.3); border-top-color: var(--cyan); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { text-align: center; padding: 28px; color: var(--text-dim); font-size: .88rem; }
+    .empty-icon { font-size: 2.2rem; opacity: .4; margin-bottom: 10px; }
+    @media (max-width: 1000px) { .hud-row { grid-template-columns: 1fr 1fr 1fr; } .recommend-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 700px) {
+      nav { padding: 12px 16px; } main { padding: 16px 14px 40px; }
+      .nav-status { display: none; } .hud-row { grid-template-columns: 1fr 1fr; }
+      .recommend-grid { grid-template-columns: 1fr; } .weak-btns { flex-direction: column; }
+      .practice-banner { flex-direction: column; text-align: center; }
+      .daily-card { flex-direction: column; text-align: center; }
+    }
+    /* ── 手机端(≤640px)专项适配 ── */
+    @media (max-width: 640px) {
+      /* nav */
+      nav { padding: 10px 12px; gap: 6px; flex-wrap: wrap; }
+      .nav-brand { font-size: 1rem; letter-spacing: .04em; }
+      .nav-links { gap: 3px; }
+      .nav-links a { padding: 5px 10px; font-size: .78rem; }
+      /* main */
+      main { padding: 12px 10px calc(24px + env(safe-area-inset-bottom)); }
+      /* HUD → 1列 on very narrow */
+      .hud-row { grid-template-columns: 1fr; gap: 10px; }
+      /* 推荐/薄弱→已经1列,微调内边距 */
+      .rec-card { padding: 16px 14px; }
+      .weak-item { flex-wrap: wrap; gap: 10px; }
+      .weak-btns { flex-direction: row; flex-wrap: wrap; }
+      .weak-btn { min-height: 40px; padding: 7px 14px; }
+      /* banner卡片纵向排列 */
+      .daily-card, .practice-banner { flex-direction: column; text-align: center; gap: 14px; padding: 18px 16px; }
+      .daily-cta, .practice-cta { margin: 0 auto; min-height: 44px; display: flex; align-items: center; justify-content: center; padding: 10px 22px; }
+      /* 模态框 */
+      .modal { padding: 22px 18px; border-radius: 16px; }
+      /* 底部安全区 */
+      body { padding-bottom: env(safe-area-inset-bottom); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+
+<div id="app">
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-brand">⚡ 期末复习指挥舱</div>
+    <div class="nav-links">
+      <a href="index.html" class="active">首页</a>
+      <a href="graph.html">知识图谱</a>
+      <a href="teacher.html">AI 老师</a>
+    </div>
+    <div class="nav-status">
+      <div class="status-item" id="nav-date"></div>
+      <div class="avatar">学</div>
+    </div>
+  </nav>
+
+  <!-- 分析中 Banner -->
+  <div id="analysis-banner">
+    <span class="banner-text">⚡ AI 正在分析数据，知识图谱和薄弱点稍后更新…</span>
+    <button class="banner-close" onclick="closeBanner()">✕</button>
+  </div>
+
+  <main>
+
+    <!-- 1. HUD -->
+    <div class="section-title">我的学习概览 HUD</div>
+    <div class="hud-row">
+
+      <div class="card widget">
+        <div class="widget-label">综合掌握度</div>
+        <div class="ring-wrap">
+          <svg viewBox="0 0 80 80" width="80" height="80">
+            <defs>
+              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2de2e6"/>
+                <stop offset="100%" stop-color="#a855f7"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="40" cy="40" r="35"/>
+            <circle class="ring-fill" id="ring-fill" cx="40" cy="40" r="35"/>
+          </svg>
+          <div class="ring-text" id="ring-text">—</div>
+        </div>
+        <div class="widget-sub">综合评分</div>
+      </div>
+
+      <div class="card widget" style="gap:10px;">
+        <div class="widget-label">连续学习天数</div>
+        <div class="streak-ring" id="streak-num">—</div>
+        <div style="font-size:.72rem;color:var(--cyan);">天</div>
+        <div class="badges-row">
+          <div class="badge">🏆 全勤</div>
+          <div class="badge purple">⚡ 进步之星</div>
+          <div class="badge magenta">🎯 薄弱攻克</div>
+        </div>
+      </div>
+
+      <div class="card widget" style="align-items:stretch;padding:18px 16px;">
+        <div class="widget-label" style="text-align:left;margin-bottom:10px;">各科掌握度</div>
+        <div class="subj-bars" id="subj-bars">
+          <div style="color:var(--text-dim);font-size:.78rem;">加载中…</div>
+        </div>
+      </div>
+
+      <div class="card widget warn">
+        <div class="widget-label">薄弱知识点</div>
+        <div class="widget-value" id="weak-count">—</div>
+        <div class="warn-pulse"></div>
+        <div class="widget-sub">个待突破</div>
+      </div>
+
+      <div class="card trend-wrap">
+        <div class="trend-label">近 7 天掌握度变化</div>
+        <svg class="sparkline" id="spark" viewBox="0 0 160 56"></svg>
+        <div style="font-size:.68rem;color:var(--cyan);margin-top:4px;text-align:right;" id="trend-delta"></div>
+      </div>
+
+    </div>
+
+    <!-- 2. 今日推荐 -->
+    <div class="section-title">今日推荐学习</div>
+    <div class="recommend-grid" id="recommend-grid">
+      <div class="card rec-card cyan" style="grid-column:1/-1;"><div class="empty-state"><div class="empty-icon">⚡</div>加载中…</div></div>
+    </div>
+
+    <!-- 3. 薄弱点速攻 -->
+    <div class="section-title">薄弱点速攻</div>
+    <div class="weak-list" id="weak-list">
+      <div class="card" style="padding:24px;"><div class="empty-state"><div class="empty-icon">🔍</div>加载中…</div></div>
+    </div>
+
+    <!-- 4. 自我练习 -->
+    <div class="section-title">自我练习</div>
+
+    <!-- 每日一练入口卡片 -->
+    <a class="card daily-card" href="practice.html?mode=daily" id="daily-card" style="display:flex;">
+      <div class="daily-icon">📅</div>
+      <div class="daily-body">
+        <div class="daily-title">每日一练</div>
+        <div class="daily-desc">
+          专攻薄弱知识点，AI 自动选题，随时可中断。<br>
+          <strong style="color:var(--cyan)">坚持每天一练，弱点变强点！</strong>
+        </div>
+        <div class="daily-streak" id="daily-streak-wrap" style="display:none;">
+          连续 <span id="daily-streak-num" style="color:var(--cyan);font-weight:800;">0</span> 天打卡 🔥
+        </div>
+      </div>
+      <div class="daily-cta">开始今日一练 →</div>
+    </a>
+
+    <a class="card practice-banner" href="practice.html">
+      <div class="practice-icon">🎮</div>
+      <div class="practice-body">
+        <div class="practice-title">自我练习 · 随练随判</div>
+        <div class="practice-desc">
+          选知识点、选薄弱点，即时出题即时判分。<br>
+          做完显示解析，做错自动进错题本。<strong style="color:var(--cyan)">不计入正式考试成绩</strong>，随时开始，随时停止。
+        </div>
+      </div>
+      <div class="practice-cta">进入练习舱 →</div>
+    </a>
+
+    <!-- 5. 最近动态 -->
+    <div class="section-title">最近动态</div>
+    <div class="activity-list" id="activity-list">
+      <div class="card activity-item">
+        <div class="act-body"><div class="empty-state"><div class="empty-icon">📋</div>加载中…</div></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- 讲解弹窗 -->
+<div class="modal-overlay" id="explain-modal" onclick="closeExplainOutside(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeExplain()">✕</button>
+    <div class="modal-title" id="explain-title">知识点讲解</div>
+    <div class="modal-body" id="explain-body"><div class="spin"></div>加载中…</div>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+/* Nav Date */
+(function () {
+  const el = document.getElementById('nav-date');
+  const d  = new Date();
+  const fmt = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+  el.innerHTML = `<span style="color:var(--text-dim)">${fmt}</span>`;
+})();
+
+/* Sparkline */
+function renderSparkline(trend) {
+  const svg = document.getElementById('spark');
+  svg.innerHTML = '';
+  if (!trend || trend.length < 2) return;
+  const data = trend.map(d => Math.round((d.mastery || 0) * 100));
+  const W = 160, H = 56, pad = 8;
+  const minV = Math.max(0, Math.min(...data) - 5);
+  const maxV = Math.min(100, Math.max(...data) + 5);
+  const range = maxV - minV || 1;
+  const pts = data.map((v, i) => {
+    const x = pad + i * ((W - pad*2) / (data.length - 1));
+    const y = H - pad - (v - minV) / range * (H - pad*2);
+    return [x, y];
+  });
+  const ns = 'http://www.w3.org/2000/svg';
+  const defs = document.createElementNS(ns,'defs');
+  const grad = document.createElementNS(ns,'linearGradient');
+  grad.id='sparkGrad'; grad.setAttribute('x1','0'); grad.setAttribute('y1','0');
+  grad.setAttribute('x2','1'); grad.setAttribute('y2','0');
+  const s1=document.createElementNS(ns,'stop'); s1.setAttribute('offset','0%'); s1.setAttribute('stop-color','#2de2e6');
+  const s2=document.createElementNS(ns,'stop'); s2.setAttribute('offset','100%'); s2.setAttribute('stop-color','#a855f7');
+  grad.appendChild(s1); grad.appendChild(s2); defs.appendChild(grad); svg.appendChild(defs);
+  const area=document.createElementNS(ns,'path');
+  area.setAttribute('d',`M${pts[0][0]},${H-pad} `+pts.map(p=>`L${p[0]},${p[1]}`).join(' ')+` L${pts[pts.length-1][0]},${H-pad} Z`);
+  area.setAttribute('fill','url(#sparkGrad)'); area.setAttribute('fill-opacity','0.12'); svg.appendChild(area);
+  const line=document.createElementNS(ns,'path');
+  line.setAttribute('d',`M${pts.map(p=>p.join(',')).join(' L')}`);
+  line.setAttribute('fill','none'); line.setAttribute('stroke','url(#sparkGrad)');
+  line.setAttribute('stroke-width','2'); line.setAttribute('stroke-linecap','round'); svg.appendChild(line);
+  pts.forEach(([x,y],i)=>{
+    const c=document.createElementNS(ns,'circle');
+    c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',i===pts.length-1?4:2.5);
+    c.setAttribute('fill',i===pts.length-1?'#a855f7':'#2de2e6'); svg.appendChild(c);
+  });
+  if (data.length >= 2) {
+    const delta = data[data.length-1] - data[0];
+    const el = document.getElementById('trend-delta');
+    el.textContent = delta > 0 ? `↑ +${delta}% 本周` : delta < 0 ? `↓ ${delta}% 本周` : '本周持平';
+  }
+}
+
+/* 环形进度 */
+function setRing(pct) {
+  const circ = 2 * Math.PI * 35;
+  const offset = circ * (1 - pct / 100);
+  document.getElementById('ring-fill').style.strokeDashoffset = offset;
+  document.getElementById('ring-text').textContent = pct + '%';
+}
+
+/* 各科颜色 */
+const SUBJ_COLORS = {
+  '数学': 'linear-gradient(90deg,#a855f7,#6d28d9)',
+  '语文': 'linear-gradient(90deg,#2de2e6,#0090a0)',
+  '英语': 'linear-gradient(90deg,#ff2d78,#c0166b)',
+  '科学': 'linear-gradient(90deg,#f59e0b,#b45309)',
+  '道法': 'linear-gradient(90deg,#10b981,#065f46)',
+};
+
+function renderSubjBars(subjects) {
+  const el = document.getElementById('subj-bars');
+  if (!subjects || subjects.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:.78rem;">暂无数据</div>';
+    return;
+  }
+  el.innerHTML = subjects.map(s => {
+    const pct = Math.round((s.mastery || 0) * 100);
+    const color = SUBJ_COLORS[s.subject] || 'linear-gradient(90deg,#2de2e6,#a855f7)';
+    return `<div class="subj-row">
+      <span class="subj-name">${escHtmlGlobal(s.subject)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="bar-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function subjCls(subj) {
+  if (subj === '数学') return 'm';
+  if (['语文','道法'].includes(subj)) return 'o';
+  return 's';
+}
+
+function renderWeakList(weakPoints) {
+  const el = document.getElementById('weak-list');
+  if (!weakPoints || weakPoints.length === 0) {
+    el.innerHTML = `<div class="card" style="padding:28px;"><div class="empty-state"><div class="empty-icon">🎉</div>暂无薄弱点，继续保持！</div></div>`;
+    return;
+  }
+  el.innerHTML = weakPoints.slice(0, 5).map((wp, i) => {
+    const pct = Math.round((wp.mastery || 0) * 100);
+    const kp  = wp.knowledge_point || '未知';
+    const subj = wp.subject || '';
+    const cls  = subjCls(subj);
+    const barColor = pct < 60 ? 'linear-gradient(90deg,var(--magenta),#ff6090)' :
+                     pct < 76 ? 'linear-gradient(90deg,#a855f7,#c084fc)' :
+                                'linear-gradient(90deg,#f59e0b,#fbbf24)';
+    const pctColor = pct < 60 ? 'var(--magenta)' : pct < 76 ? 'var(--purple)' : '#f59e0b';
+    return `<div class="card weak-item">
+      <div class="weak-subj ${cls}">${escHtmlGlobal(subj.slice(0,2)||'其')}</div>
+      <div class="weak-info">
+        <div class="weak-name">${escHtmlGlobal(kp)}</div>
+        <div class="weak-bar-wrap"><div class="weak-bar" style="width:${pct}%;background:${barColor}"></div></div>
+        <div class="weak-pct" style="color:${pctColor}">掌握度 ${pct}%</div>
+      </div>
+      <div class="weak-btns">
+        <button class="weak-btn study" data-kp="${escHtmlGlobal(kp)}" onclick="openExplain(this.dataset.kp, this)">📖 讲解+练习</button>
+        <button class="weak-btn ask" onclick="window.location='teacher.html?topic=${encodeURIComponent(kp)}'">🤖 问 AI 老师</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderRecommend(weakPoints) {
+  const grid = document.getElementById('recommend-grid');
+  if (!weakPoints || weakPoints.length === 0) {
+    grid.innerHTML = `<div class="card rec-card cyan" style="grid-column:1/-1;"><div class="empty-state"><div class="empty-icon">📚</div>上传试卷后 AI 将自动分析并推荐学习内容</div></div>`;
+    return;
+  }
+  const colors  = ['magenta','purple','cyan'];
+  const actions = [
+    { text:'开始练习 →', href:'practice.html' },
+    { text:'专项练习 →', href:'practice.html' },
+    { text:'问 AI 老师 →', href:'teacher.html' },
+  ];
+  grid.innerHTML = weakPoints.slice(0, 3).map((wp, i) => {
+    const color = colors[i % colors.length];
+    const pct   = Math.round((wp.mastery || 0) * 100);
+    const kp    = wp.knowledge_point || '';
+    const why   = wp.why || `掌握度 ${pct}%，建议重点突破`;
+    const act   = actions[i % actions.length];
+    return `<div class="card rec-card ${color}">
+      <div class="rec-subj ${color}">${escHtmlGlobal(wp.subject || '综合')}</div>
+      <div class="rec-title">${escHtmlGlobal(kp)} · 精准突破</div>
+      <div class="rec-reason">${escHtmlGlobal(why)}</div>
+      <div class="rec-action" onclick="window.location='${act.href}'">${act.text}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderActivity(recent) {
+  const el = document.getElementById('activity-list');
+  if (!recent || recent.length === 0) {
+    el.innerHTML = `<div class="card activity-item"><div class="act-icon cyan-bg">📋</div><div class="act-body"><div class="act-title">暂无最近动态</div><div class="act-sub">开始练习或上传试卷后这里会显示记录</div></div></div>`;
+    return;
+  }
+  const typeMap = {
+    'practice': { icon:'🎮', cls:'cyan-bg' },
+    'chat':     { icon:'🤖', cls:'purple-bg' },
+    'upload':   { icon:'🌐', cls:'magenta-bg' },
+    'wrong':    { icon:'📝', cls:'cyan-bg' },
+  };
+  el.innerHTML = recent.slice(0, 5).map(r => {
+    const m = typeMap[r.type] || { icon:'📌', cls:'cyan-bg' };
+    return `<div class="card activity-item">
+      <div class="act-icon ${m.cls}">${m.icon}</div>
+      <div class="act-body">
+        <div class="act-title">${escHtmlGlobal(r.text || '')}</div>
+      </div>
+      <div class="act-time">${escHtmlGlobal(r.time || '')}</div>
+    </div>`;
+  }).join('');
+}
+
+/* 讲解弹窗 */
+let _explainKp = null;
+async function openExplain(kp, btn, refresh = false) {
+  _explainKp = kp;
+  const modal = document.getElementById('explain-modal');
+  document.getElementById('explain-title').textContent = `📖 ${kp} — 讲解 + 练习`;
+  document.getElementById('explain-body').innerHTML = refresh
+    ? '<div><span class="spin"></span>AI 正在重新出一批练习…</div>'
+    : '<div><span class="spin"></span>加载讲解中…</div>';
+  modal.classList.add('open');
+  if (btn) { btn.disabled = true; btn.textContent = '加载中…'; }
+  try {
+    const data = await api('/weak/explain', {
+      method: 'POST',
+      body: JSON.stringify({ knowledge_point: kp, refresh }),
+    });
+    let html = `<div style="margin-bottom:12px;">${escHtmlGlobal(data.explanation || '').replace(/\n/g,'<br>')}</div>`;
+    if (data.worked_example) {
+      html += `<div style="margin-bottom:12px;padding:10px;border-radius:8px;background:rgba(45,226,230,.05);border:1px solid rgba(45,226,230,.15);">
+        <strong style="color:var(--cyan)">例题：</strong><br>${escHtmlGlobal(data.worked_example).replace(/\n/g,'<br>')}
+      </div>`;
+    }
+    if (data.practice && data.practice.length) {
+      html += `<div style="margin-top:14px;font-size:.75rem;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">练习题</div>`;
+      html += data.practice.map(p => `<div class="practice-block">
+        <div class="stem">${escHtmlGlobal(p.stem || '')}</div>
+        <div class="ans">答案：${escHtmlGlobal(p.answer || '')}</div>
+        ${p.explanation ? `<div class="exp">${escHtmlGlobal(p.explanation)}</div>` : ''}
+      </div>`).join('');
+    }
+    // 刷新按钮 + 缓存标识
+    html += `<div style="margin-top:16px;display:flex;align-items:center;gap:10px;">
+      <button onclick="openExplain(_explainKp, null, true)" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.5);color:#c9a8f7;border-radius:10px;padding:7px 14px;font-size:.82rem;cursor:pointer;">🔄 换一批练习(AI 重出)</button>
+      ${data.cached ? '<span style="color:var(--text-dim);font-size:.72rem;">⚡ 来自缓存,秒开</span>' : '<span style="color:var(--text-dim);font-size:.72rem;">已存入题库</span>'}
+    </div>`;
+    document.getElementById('explain-body').innerHTML = html;
+  } catch (e) {
+    document.getElementById('explain-body').innerHTML = `<div style="color:var(--magenta);">⚠ 加载失败：${escHtmlGlobal(e.message)}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📖 讲解+练习'; }
+  }
+}
+function closeExplain() { document.getElementById('explain-modal').classList.remove('open'); }
+function closeExplainOutside(e) { if (e.target === document.getElementById('explain-modal')) closeExplain(); }
+function closeBanner() { document.getElementById('analysis-banner').classList.remove('visible'); }
+
+/* 分析轮询 */
+let stopPoll = null;
+function startPoll() {
+  if (stopPoll) stopPoll();
+  stopPoll = pollAnalysisStatus(() => loadDashboard());
+}
+
+/* 主加载 */
+async function loadDashboard() {
+  try {
+    const [dashboard, analysisStatus] = await Promise.allSettled([
+      api('/dashboard'),
+      api('/analysis/status'),
+    ]);
+
+    const as = analysisStatus.status === 'fulfilled' ? analysisStatus.value : null;
+    if (as && as.running) {
+      document.getElementById('analysis-banner').classList.add('visible');
+      startPoll();
+    }
+
+    const db = dashboard.status === 'fulfilled' ? dashboard.value : null;
+    if (!db) {
+      document.getElementById('ring-text').textContent = '0%';
+      document.getElementById('streak-num').textContent = '0';
+      document.getElementById('weak-count').textContent = '0';
+      document.getElementById('subj-bars').innerHTML = '<div style="color:var(--text-dim);font-size:.78rem;">暂无数据，请先上传试卷</div>';
+      renderRecommend([]);
+      renderWeakList([]);
+      renderActivity([]);
+      return;
+    }
+
+    const mastery = Math.round((db.overall_mastery || 0) * 100);
+    setTimeout(() => setRing(mastery), 100);
+    document.getElementById('streak-num').textContent = db.streak_days || 0;
+    renderSubjBars(db.subjects || []);
+    const weakCount = (db.counts && db.counts.weak != null) ? db.counts.weak : (db.weak_points || []).length;
+    document.getElementById('weak-count').textContent = weakCount;
+    renderSparkline(db.trend || []);
+    renderRecommend(db.weak_points || []);
+    renderWeakList(db.weak_points || []);
+    renderActivity(db.recent || []);
+
+    // 每日一练连续天数
+    const streak = db.streak_days || 0;
+    if (streak > 0) {
+      document.getElementById('daily-streak-num').textContent = streak;
+      document.getElementById('daily-streak-wrap').style.display = '';
+    }
+
+  } catch (e) {
+    console.error('Dashboard 加载失败', e);
+    document.getElementById('subj-bars').innerHTML = '<div style="color:var(--magenta);font-size:.78rem;">⚠ 数据加载失败，请刷新重试</div>';
+  }
+}
+
+loadDashboard();
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

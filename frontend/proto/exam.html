@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能模拟卷生成器 | 期末复习指挥舱</title>
+<style>
+  /* ===== RESET & BASE ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cyan:    #2de2e6;
+    --purple:  #a855f7;
+    --magenta: #ff2d78;
+    --bg:      #0a0e1a;
+    --glass-bg: rgba(255,255,255,0.04);
+    --glass-border: rgba(255,255,255,0.08);
+    --text-primary: #e2e8f0;
+    --text-dim: #64748b;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'PingFang SC', 'Microsoft YaHei', '微软雅黑', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* ===== SCANLINE OVERLAY ===== */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.04) 2px,
+      rgba(0,0,0,0.04) 4px
+    );
+    animation: scanMove 8s linear infinite;
+  }
+  @keyframes scanMove {
+    0%   { background-position: 0 0; }
+    100% { background-position: 0 100px; }
+  }
+
+  /* ===== LAYOUT ===== */
+  #app {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ===== TOP NAV ===== */
+  nav {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    padding: 1rem 2rem;
+    background: rgba(10,14,26,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(45,226,230,0.2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 24px rgba(45,226,230,0.08);
+  }
+
+  .nav-brand {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--cyan);
+    text-shadow: 0 0 16px rgba(45,226,230,0.7);
+    white-space: nowrap;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 0.5rem;
+    list-style: none;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.9rem;
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    transition: all 0.25s;
+    letter-spacing: 0.04em;
+  }
+
+  .nav-links a:hover,
+  .nav-links a.active {
+    color: var(--cyan);
+    border-color: rgba(45,226,230,0.4);
+    text-shadow: 0 0 8px rgba(45,226,230,0.6);
+    background: rgba(45,226,230,0.06);
+  }
+
+  .nav-links a.active {
+    background: rgba(45,226,230,0.1);
+    box-shadow: 0 0 12px rgba(45,226,230,0.15);
+  }
+
+  /* ===== MAIN CONTENT ===== */
+  main {
+    flex: 1;
+    padding: 2.5rem 2rem 4rem;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* ===== PAGE TITLE ===== */
+  .page-title {
+    text-align: center;
+    margin-bottom: 2.8rem;
+  }
+
+  .page-title h1 {
+    font-size: 2.4rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 50%, var(--magenta) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 20px rgba(168,85,247,0.5));
+    line-height: 1.2;
+    animation: titleGlow 3s ease-in-out infinite alternate;
+  }
+
+  @keyframes titleGlow {
+    0%   { filter: drop-shadow(0 0 16px rgba(45,226,230,0.5)); }
+    100% { filter: drop-shadow(0 0 28px rgba(168,85,247,0.7)); }
+  }
+
+  .page-subtitle {
+    margin-top: 0.6rem;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ===== GLASS CARD ===== */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: box-shadow 0.3s, border-color 0.3s;
+  }
+
+  /* ===== SOURCE PANELS GRID ===== */
+  .source-panels {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 900px) {
+    .source-panels { grid-template-columns: 1fr; }
+  }
+
+  /* Panel glow variants */
+  .panel-cyan  { border-color: rgba(45,226,230,0.3); }
+  .panel-cyan:hover  { box-shadow: 0 0 32px rgba(45,226,230,0.2); border-color: rgba(45,226,230,0.5); }
+
+  .panel-magenta { border-color: rgba(255,45,120,0.3); }
+  .panel-magenta:hover { box-shadow: 0 0 32px rgba(255,45,120,0.2); border-color: rgba(255,45,120,0.5); }
+
+  .panel-purple  { border-color: rgba(168,85,247,0.3); }
+  .panel-purple:hover  { box-shadow: 0 0 32px rgba(168,85,247,0.2); border-color: rgba(168,85,247,0.5); }
+
+  /* ===== PANEL HEADER ===== */
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .panel-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .panel-cyan .panel-title  { color: var(--cyan); text-shadow: 0 0 10px rgba(45,226,230,0.5); }
+  .panel-magenta .panel-title { color: var(--magenta); text-shadow: 0 0 10px rgba(255,45,120,0.5); }
+  .panel-purple .panel-title  { color: var(--purple); text-shadow: 0 0 10px rgba(168,85,247,0.5); }
+
+  /* ===== SCI-FI TOGGLE SWITCH ===== */
+  .toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+  }
+
+  .toggle-label-auto,
+  .toggle-label-manual,
+  .toggle-label-on,
+  .toggle-label-off {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    transition: color 0.2s;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 46px;
+    height: 22px;
+    cursor: pointer;
+  }
+
+  .toggle-switch input { display: none; }
+
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #94a3b8;
+    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), background 0.3s, box-shadow 0.3s;
+  }
+
+  /* Cyan toggle */
+  .toggle-cyan input:checked ~ .toggle-track {
+    background: rgba(45,226,230,0.2);
+    border-color: rgba(45,226,230,0.5);
+    box-shadow: 0 0 12px rgba(45,226,230,0.4);
+  }
+  .toggle-cyan input:checked ~ .toggle-thumb {
+    transform: translateX(24px);
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+  }
+
+  /* Magenta toggle */
+  .toggle-magenta input:checked ~ .toggle-track {
+    background: rgba(255,45,120,0.2);
+    border-color: rgba(255,45,120,0.5);
+    box-shadow: 0 0 12px rgba(255,45,120,0.4);
+  }
+  .toggle-magenta input:checked ~ .toggle-thumb {
+    transform: translateX(24px);
+    background: var(--magenta);
+    box-shadow: 0 0 8px var(--magenta);
+  }
+
+  /* Purple toggle */
+  .toggle-purple input:checked ~ .toggle-track {
+    background: rgba(168,85,247,0.2);
+    border-color: rgba(168,85,247,0.5);
+    box-shadow: 0 0 12px rgba(168,85,247,0.4);
+  }
+  .toggle-purple input:checked ~ .toggle-thumb {
+    transform: translateX(24px);
+    background: var(--purple);
+    box-shadow: 0 0 8px var(--purple);
+  }
+
+  /* ===== PANEL BODY ===== */
+  .panel-body {
+    padding: 1.1rem 1.25rem;
+    min-height: 160px;
+  }
+
+  /* ===== AUTO MODE CONTENT ===== */
+  .auto-content, .manual-content {
+    transition: opacity 0.3s, transform 0.3s;
+  }
+
+  .auto-desc {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin-bottom: 0.9rem;
+  }
+
+  /* Pulsing AI indicator */
+  .ai-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  .ai-indicator-cyan {
+    background: rgba(45,226,230,0.12);
+    border: 1px solid rgba(45,226,230,0.4);
+    color: var(--cyan);
+  }
+  .ai-indicator-magenta {
+    background: rgba(255,45,120,0.12);
+    border: 1px solid rgba(255,45,120,0.4);
+    color: var(--magenta);
+  }
+  .ai-indicator-purple {
+    background: rgba(168,85,247,0.12);
+    border: 1px solid rgba(168,85,247,0.4);
+    color: var(--purple);
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(45,226,230,0); }
+    50%       { opacity: 0.8; box-shadow: 0 0 16px 4px rgba(45,226,230,0.2); }
+  }
+
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    animation: dotBlink 1.2s ease-in-out infinite;
+  }
+  .dot-cyan    { background: var(--cyan); }
+  .dot-magenta { background: var(--magenta); }
+  .dot-purple  { background: var(--purple); }
+
+  @keyframes dotBlink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.3; transform: scale(0.6); }
+  }
+
+  /* ===== KNOWLEDGE CHIPS ===== */
+  .chips-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.2s;
+    user-select: none;
+    position: relative;
+  }
+
+  .chip input[type="checkbox"] { display: none; }
+
+  /* Cyan chips */
+  .chip-cyan {
+    border-color: rgba(45,226,230,0.25);
+    color: rgba(45,226,230,0.65);
+    background: rgba(45,226,230,0.05);
+  }
+  .chip-cyan:hover {
+    border-color: rgba(45,226,230,0.5);
+    color: var(--cyan);
+    background: rgba(45,226,230,0.1);
+    box-shadow: 0 0 10px rgba(45,226,230,0.25);
+  }
+  .chip-cyan.selected {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(45,226,230,0.18);
+    box-shadow: 0 0 14px rgba(45,226,230,0.4), inset 0 0 6px rgba(45,226,230,0.1);
+    text-shadow: 0 0 6px rgba(45,226,230,0.6);
+  }
+
+  /* Magenta chips */
+  .chip-magenta {
+    border-color: rgba(255,45,120,0.25);
+    color: rgba(255,45,120,0.65);
+    background: rgba(255,45,120,0.05);
+  }
+  .chip-magenta:hover {
+    border-color: rgba(255,45,120,0.5);
+    color: var(--magenta);
+    background: rgba(255,45,120,0.1);
+    box-shadow: 0 0 10px rgba(255,45,120,0.25);
+  }
+  .chip-magenta.selected {
+    border-color: var(--magenta);
+    color: var(--magenta);
+    background: rgba(255,45,120,0.18);
+    box-shadow: 0 0 14px rgba(255,45,120,0.4), inset 0 0 6px rgba(255,45,120,0.1);
+    text-shadow: 0 0 6px rgba(255,45,120,0.6);
+  }
+
+  .mastery-badge {
+    font-size: 0.68rem;
+    opacity: 0.8;
+    font-weight: 600;
+  }
+
+  .mastery-high   { color: #4ade80; }
+  .mastery-mid    { color: #fbbf24; }
+  .mastery-low    { color: #f87171; }
+
+  /* ===== OFF STATE ===== */
+  .off-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 120px;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .off-icon {
+    font-size: 2rem;
+    opacity: 0.3;
+  }
+
+  .off-text {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    text-align: center;
+  }
+
+  /* AI insights */
+  .ai-insights {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(168,85,247,0.06);
+    border-radius: 8px;
+    border: 1px solid rgba(168,85,247,0.15);
+  }
+
+  .ai-insights p {
+    font-size: 0.8rem;
+    color: #c4b5fd;
+    line-height: 1.9;
+  }
+
+  /* ===== CONFIG ROW ===== */
+  .config-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (max-width: 900px) {
+    .config-row { grid-template-columns: 1fr 1fr; }
+  }
+
+  .config-card {
+    padding: 1.1rem 1.25rem;
+  }
+
+  .config-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* Quantity slider */
+  .qty-display {
+    font-size: 2rem;
+    font-weight: 900;
+    color: var(--cyan);
+    text-shadow: 0 0 16px rgba(45,226,230,0.5);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+
+  .qty-unit { font-size: 0.9rem; color: var(--text-dim); }
+
+  input[type="range"] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    outline: none;
+    margin-top: 0.25rem;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan);
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 18px var(--cyan);
+  }
+
+  /* Question type checkboxes */
+  .type-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .type-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.83rem;
+    color: #94a3b8;
+    transition: color 0.2s;
+  }
+
+  .type-option:hover { color: var(--text-primary); }
+
+  .type-option input[type="checkbox"] { display: none; }
+
+  .custom-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid rgba(168,85,247,0.4);
+    background: rgba(168,85,247,0.05);
+    position: relative;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .type-option input:checked + .custom-check {
+    background: rgba(168,85,247,0.3);
+    border-color: var(--purple);
+    box-shadow: 0 0 8px rgba(168,85,247,0.4);
+  }
+
+  .type-option input:checked + .custom-check::after {
+    content: '✓';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--purple);
+    font-weight: 900;
+    text-shadow: 0 0 6px rgba(168,85,247,0.8);
+  }
+
+  /* Difficulty toggle */
+  .diff-toggle {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .diff-btn {
+    flex: 1;
+    padding: 0.45rem 0;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    letter-spacing: 0.03em;
+  }
+
+  .diff-btn:not(:last-child) {
+    border-right: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .diff-btn.active-easy   { background: rgba(74,222,128,0.15); color: #4ade80; box-shadow: inset 0 0 10px rgba(74,222,128,0.1); }
+  .diff-btn.active-medium { background: rgba(251,191,36,0.15); color: #fbbf24; box-shadow: inset 0 0 10px rgba(251,191,36,0.1); }
+  .diff-btn.active-hard   { background: rgba(255,45,120,0.15); color: var(--magenta); box-shadow: inset 0 0 10px rgba(255,45,120,0.1); }
+
+  /* Total score */
+  .score-display {
+    font-size: 2.5rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 10px rgba(168,85,247,0.4));
+    line-height: 1;
+  }
+
+  .score-note {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 0.4rem;
+  }
+
+  /* ===== GENERATE BUTTON ===== */
+  .generate-wrap {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  .btn-generate {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 3rem;
+    font-size: 1.2rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    color: #0a0e1a;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow:
+      0 0 24px rgba(45,226,230,0.5),
+      0 0 48px rgba(168,85,247,0.3),
+      0 4px 20px rgba(0,0,0,0.4);
+    animation: btnPulse 2.5s ease-in-out infinite;
+    transition: transform 0.15s, box-shadow 0.15s;
+    overflow: hidden;
+  }
+
+  .btn-generate::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%);
+  }
+
+  .btn-generate:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow:
+      0 0 36px rgba(45,226,230,0.7),
+      0 0 72px rgba(168,85,247,0.5),
+      0 8px 30px rgba(0,0,0,0.5);
+    animation: none;
+  }
+
+  .btn-generate:active {
+    transform: scale(0.97);
+  }
+
+  @keyframes btnPulse {
+    0%, 100% { box-shadow: 0 0 24px rgba(45,226,230,0.5), 0 0 48px rgba(168,85,247,0.3), 0 4px 20px rgba(0,0,0,0.4); }
+    50%       { box-shadow: 0 0 40px rgba(45,226,230,0.8), 0 0 80px rgba(168,85,247,0.5), 0 4px 20px rgba(0,0,0,0.4); }
+  }
+
+  /* Loading state */
+  .btn-generate.loading {
+    animation: none;
+    pointer-events: none;
+    opacity: 0.8;
+  }
+
+  .spinner-ring {
+    display: none;
+    width: 22px;
+    height: 22px;
+    border: 2px solid rgba(10,14,26,0.3);
+    border-top-color: #0a0e1a;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  .btn-generate.loading .spinner-ring { display: block; }
+  .btn-generate.loading .btn-icon { display: none; }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ===== EXAM RESULT SECTION ===== */
+  #exam-result {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    pointer-events: none;
+  }
+
+  #exam-result.revealed {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .result-header-label {
+    text-align: center;
+    margin-bottom: 1.25rem;
+  }
+
+  .result-header-label span {
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    padding: 0.3rem 1rem;
+    border: 1px solid rgba(45,226,230,0.3);
+    border-radius: 999px;
+    background: rgba(45,226,230,0.05);
+  }
+
+  /* The exam paper itself */
+  .exam-paper {
+    background: rgba(248,250,252,0.96);
+    backdrop-filter: blur(8px);
+    border-radius: 16px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow:
+      0 0 40px rgba(45,226,230,0.25),
+      0 0 80px rgba(168,85,247,0.12),
+      0 8px 40px rgba(0,0,0,0.4);
+    padding: 2.5rem 3rem;
+    color: #1e293b;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .exam-paper::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(135deg, var(--cyan), var(--purple), var(--magenta));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+  }
+
+  .exam-title {
+    text-align: center;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .exam-title h2 {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #0f172a;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.4rem;
+  }
+
+  .exam-meta {
+    display: flex;
+    justify-content: center;
+    gap: 2.5rem;
+    font-size: 0.82rem;
+    color: #64748b;
+  }
+
+  .exam-meta span { display: flex; align-items: center; gap: 0.3rem; }
+
+  .exam-section {
+    margin-bottom: 1.75rem;
+  }
+
+  .section-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #1e293b;
+    border-left: 4px solid;
+    padding-left: 0.75rem;
+    margin-bottom: 1rem;
+    letter-spacing: 0.04em;
+  }
+
+  .section-1 .section-title { border-color: #2563eb; }
+  .section-2 .section-title { border-color: #7c3aed; }
+  .section-3 .section-title { border-color: #059669; }
+  .section-4 .section-title { border-color: #dc2626; }
+
+  .question {
+    margin-bottom: 1rem;
+  }
+
+  .question-num {
+    font-weight: 700;
+    color: #374151;
+  }
+
+  .question p {
+    font-size: 0.9rem;
+    color: #374151;
+    line-height: 1.7;
+    margin-bottom: 0.4rem;
+  }
+
+  .options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 1rem;
+    margin-top: 0.4rem;
+    padding-left: 0.5rem;
+  }
+
+  .options span {
+    font-size: 0.87rem;
+    color: #374151;
+  }
+
+  .blank-line {
+    display: inline-block;
+    width: 80px;
+    border-bottom: 1.5px solid #94a3b8;
+    margin: 0 0.2rem;
+    vertical-align: bottom;
+  }
+
+  .calc-space {
+    margin-top: 0.6rem;
+    padding: 0.6rem;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: #94a3b8;
+    min-height: 48px;
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .exam-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .exam-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.5rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+    border: 1.5px solid;
+  }
+
+  .exam-btn-pdf {
+    background: rgba(37,99,235,0.08);
+    border-color: #2563eb;
+    color: #2563eb;
+  }
+
+  .exam-btn-pdf:hover {
+    background: rgba(37,99,235,0.15);
+    box-shadow: 0 0 16px rgba(37,99,235,0.3);
+  }
+
+  .exam-btn-print {
+    background: rgba(5,150,105,0.08);
+    border-color: #059669;
+    color: #059669;
+  }
+
+  .exam-btn-print:hover {
+    background: rgba(5,150,105,0.15);
+    box-shadow: 0 0 16px rgba(5,150,105,0.3);
+  }
+
+  /* ===== HIDDEN UTILITY ===== */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ===== NAV ===== -->
+  <nav>
+    <a class="nav-brand" href="index.html">🛸 期末复习指挥舱</a>
+    <ul class="nav-links">
+      <li><a href="index.html">主页</a></li>
+      <li><a href="ai.html">AI 老师</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+    <!-- ===== PAGE TITLE ===== -->
+    <div class="page-title">
+      <h1>⚡ 智能模拟卷生成器</h1>
+      <p class="page-subtitle">AI · 多源融合 · 精准命题 · 实时生成</p>
+    </div>
+
+    <!-- ===== SOURCE SELECTION PANELS ===== -->
+    <div class="source-panels">
+
+      <!-- PANEL A: Knowledge Graph -->
+      <div class="glass-card panel-cyan" id="panel-a">
+        <div class="panel-header">
+          <div class="panel-title">🌐 基于知识图谱选考点</div>
+          <div class="toggle-group">
+            <span class="toggle-label-auto" id="label-auto-a">自动</span>
+            <label class="toggle-switch toggle-cyan">
+              <input type="checkbox" id="toggle-a" onchange="switchPanel('a', this.checked)">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+            <span class="toggle-label-manual" id="label-manual-a" style="color:var(--cyan);text-shadow:0 0 8px rgba(45,226,230,0.5)">手动</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <!-- AUTO MODE -->
+          <div class="auto-content" id="auto-a">
+            <p class="auto-desc">系统将根据知识图谱掌握度，智能抽取薄弱知识点，优先覆盖低掌握度节点。</p>
+            <div class="ai-indicator ai-indicator-cyan">
+              <div class="pulse-dot dot-cyan"></div>
+              AI运算中
+            </div>
+          </div>
+          <!-- MANUAL MODE -->
+          <div class="manual-content hidden" id="manual-a">
+            <div class="chips-grid" id="chips-a">
+              <label class="chip chip-cyan" onclick="toggleChip(this)">
+                <input type="checkbox">
+                分数加减法 <span class="mastery-badge mastery-mid">(62%)</span>
+              </label>
+              <label class="chip chip-cyan selected" onclick="toggleChip(this)">
+                <input type="checkbox" checked>
+                分数乘除法 <span class="mastery-badge mastery-low">(38%)</span>
+              </label>
+              <label class="chip chip-cyan" onclick="toggleChip(this)">
+                <input type="checkbox">
+                小数运算 <span class="mastery-badge mastery-high">(85%)</span>
+              </label>
+              <label class="chip chip-cyan selected" onclick="toggleChip(this)">
+                <input type="checkbox" checked>
+                方程与未知数 <span class="mastery-badge mastery-low">(44%)</span>
+              </label>
+              <label class="chip chip-cyan" onclick="toggleChip(this)">
+                <input type="checkbox">
+                面积与周长 <span class="mastery-badge mastery-high">(78%)</span>
+              </label>
+              <label class="chip chip-cyan" onclick="toggleChip(this)">
+                <input type="checkbox">
+                统计与图表 <span class="mastery-badge mastery-mid">(66%)</span>
+              </label>
+              <label class="chip chip-cyan selected" onclick="toggleChip(this)">
+                <input type="checkbox" checked>
+                时间与速度 <span class="mastery-badge mastery-low">(41%)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL B: Wrong Questions -->
+      <div class="glass-card panel-magenta" id="panel-b">
+        <div class="panel-header">
+          <div class="panel-title">❌ 基于错题选考点</div>
+          <div class="toggle-group">
+            <span class="toggle-label-auto" id="label-auto-b">自动</span>
+            <label class="toggle-switch toggle-magenta">
+              <input type="checkbox" id="toggle-b" onchange="switchPanel('b', this.checked)">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+            <span class="toggle-label-manual" id="label-manual-b" style="color:var(--magenta);text-shadow:0 0 8px rgba(255,45,120,0.5)">手动</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <!-- AUTO MODE -->
+          <div class="auto-content" id="auto-b">
+            <p class="auto-desc">系统将从错题库中智能筛选高频错误知识点，优先覆盖反复出错的题型。</p>
+            <div class="ai-indicator ai-indicator-magenta">
+              <div class="pulse-dot dot-magenta"></div>
+              AI运算中
+            </div>
+          </div>
+          <!-- MANUAL MODE -->
+          <div class="manual-content hidden" id="manual-b">
+            <div class="chips-grid" id="chips-b">
+              <label class="chip chip-magenta selected" onclick="toggleChip(this)">
+                <input type="checkbox" checked>
+                分数计算 <span class="mastery-badge">(8题)</span>
+              </label>
+              <label class="chip chip-magenta selected" onclick="toggleChip(this)">
+                <input type="checkbox" checked>
+                方程求解 <span class="mastery-badge">(5题)</span>
+              </label>
+              <label class="chip chip-magenta selected" onclick="toggleChip(this)">
+                <input type="checkbox" checked>
+                小数除法 <span class="mastery-badge">(6题)</span>
+              </label>
+              <label class="chip chip-magenta" onclick="toggleChip(this)">
+                <input type="checkbox">
+                科学实验 <span class="mastery-badge">(4题)</span>
+              </label>
+              <label class="chip chip-magenta" onclick="toggleChip(this)">
+                <input type="checkbox">
+                古诗默写 <span class="mastery-badge">(3题)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL C: AI Analysis -->
+      <div class="glass-card panel-purple" id="panel-c">
+        <div class="panel-header">
+          <div class="panel-title">🤖 基于AI整体分析</div>
+          <div class="toggle-group">
+            <span class="toggle-label-off" id="label-off-c" style="color:var(--text-dim)">关</span>
+            <label class="toggle-switch toggle-purple">
+              <input type="checkbox" id="toggle-c" checked onchange="switchPanelC(this.checked)">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+            <span class="toggle-label-on" id="label-on-c" style="color:var(--purple);text-shadow:0 0 8px rgba(168,85,247,0.5)">开</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <!-- ON STATE -->
+          <div id="panel-c-on">
+            <p class="auto-desc">AI将基于对学生整体学习情况的深度分析，智能补充针对性题目，构建全面评估。</p>
+            <div class="ai-indicator ai-indicator-purple" style="margin-bottom:0.75rem;">
+              <div class="pulse-dot dot-purple"></div>
+              AI深度分析中
+            </div>
+            <div class="ai-insights">
+              <p>• 建议加强分数运算类题目覆盖</p>
+              <p>• 时间题型错误率偏高，需重点考查</p>
+              <p>• 英语词汇题需补充巩固训练</p>
+            </div>
+          </div>
+          <!-- OFF STATE -->
+          <div class="off-state hidden" id="panel-c-off">
+            <div class="off-icon">🤖</div>
+            <p class="off-text">AI分析已关闭<br>将仅使用上方两个来源</p>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.source-panels -->
+
+    <!-- ===== CONFIG ROW ===== -->
+    <div class="config-row">
+
+      <!-- 题目数量 -->
+      <div class="glass-card config-card">
+        <div class="config-label">题目数量</div>
+        <div class="qty-display" id="qty-display">20<span class="qty-unit"> 题</span></div>
+        <input type="range" min="5" max="50" value="20" id="qty-slider"
+          oninput="document.getElementById('qty-display').innerHTML = this.value + '<span class=qty-unit> 题</span>'">
+      </div>
+
+      <!-- 题型配置 -->
+      <div class="glass-card config-card">
+        <div class="config-label">题型配置</div>
+        <div class="type-options">
+          <label class="type-option">
+            <input type="checkbox" checked onchange="updateScore()">
+            <div class="custom-check"></div>
+            选择题
+          </label>
+          <label class="type-option">
+            <input type="checkbox" checked onchange="updateScore()">
+            <div class="custom-check"></div>
+            填空题
+          </label>
+          <label class="type-option">
+            <input type="checkbox" checked onchange="updateScore()">
+            <div class="custom-check"></div>
+            计算题
+          </label>
+          <label class="type-option">
+            <input type="checkbox" checked onchange="updateScore()">
+            <div class="custom-check"></div>
+            解答题
+          </label>
+        </div>
+      </div>
+
+      <!-- 难度设置 -->
+      <div class="glass-card config-card">
+        <div class="config-label">难度设置</div>
+        <div class="diff-toggle" style="margin-top:0.5rem;">
+          <button class="diff-btn" onclick="setDiff('easy', this)">简单</button>
+          <button class="diff-btn active-medium" id="diff-medium" onclick="setDiff('medium', this)">中等</button>
+          <button class="diff-btn" onclick="setDiff('hard', this)">困难</button>
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-dim);margin-top:0.6rem;" id="diff-desc">平衡题型分布，适合期末综合复习</p>
+      </div>
+
+      <!-- 预计总分 -->
+      <div class="glass-card config-card">
+        <div class="config-label">预计总分</div>
+        <div class="score-display" id="score-display">100<span style="font-size:1rem;-webkit-text-fill-color:var(--text-dim)"> 分</span></div>
+        <p class="score-note" id="score-note">4种题型 · 满分配置</p>
+      </div>
+
+    </div><!-- /.config-row -->
+
+    <!-- ===== GENERATE BUTTON ===== -->
+    <div class="generate-wrap">
+      <button class="btn-generate" id="btn-gen" onclick="generateExam()">
+        <div class="spinner-ring"></div>
+        <span class="btn-icon">⚡</span>
+        <span id="btn-text">生成模拟卷</span>
+      </button>
+    </div>
+
+    <!-- ===== EXAM RESULT ===== -->
+    <div id="exam-result">
+      <div class="result-header-label">
+        <span>▼ 模拟卷已生成 · AI命题完成</span>
+      </div>
+
+      <div class="exam-paper">
+        <!-- Exam Header -->
+        <div class="exam-title">
+          <h2>六年级期末综合模拟卷</h2>
+          <div class="exam-meta">
+            <span>📅 日期：<u>__________</u></span>
+            <span>👤 姓名：<u>__________</u></span>
+            <span>📊 总分：<strong>100分</strong></span>
+            <span>⏱ 限时：<strong>90分钟</strong></span>
+          </div>
+        </div>
+
+        <!-- Section 1: 选择题 -->
+        <div class="exam-section section-1">
+          <div class="section-title">第一部分：选择题（每题5分，共20分）</div>
+
+          <div class="question">
+            <p><span class="question-num">1.</span> 计算 <strong>3/4 + 1/6</strong> 的结果是（　　）。</p>
+            <div class="options">
+              <span>A. 4/10</span>
+              <span>B. 11/12</span>
+              <span>C. 5/8</span>
+              <span>D. 7/12</span>
+            </div>
+          </div>
+
+          <div class="question">
+            <p><span class="question-num">2.</span> 一辆汽车以 <strong>60千米/小时</strong> 的速度行驶，行驶 <strong>2.5小时</strong> 共走了多少千米？（　　）</p>
+            <div class="options">
+              <span>A. 120千米</span>
+              <span>B. 130千米</span>
+              <span>C. 150千米</span>
+              <span>D. 160千米</span>
+            </div>
+          </div>
+
+          <div class="question">
+            <p><span class="question-num">3.</span> 方程 <strong>2x − 7 = 15</strong> 的解是（　　）。</p>
+            <div class="options">
+              <span>A. x = 4</span>
+              <span>B. x = 11</span>
+              <span>C. x = 8</span>
+              <span>D. x = 3.5</span>
+            </div>
+          </div>
+
+          <div class="question">
+            <p><span class="question-num">4.</span> 一个长方形的长为 <strong>8cm</strong>，宽为 <strong>5cm</strong>，其面积是（　　）。</p>
+            <div class="options">
+              <span>A. 26平方厘米</span>
+              <span>B. 40平方厘米</span>
+              <span>C. 13平方厘米</span>
+              <span>D. 80平方厘米</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: 填空题 -->
+        <div class="exam-section section-2">
+          <div class="section-title">第二部分：填空题（每题8分，共24分）</div>
+
+          <div class="question">
+            <p><span class="question-num">5.</span>
+              <strong>5/8 × 4/3</strong> = <span class="blank-line"></span>，
+              化成最简分数是 <span class="blank-line"></span>。
+            </p>
+          </div>
+
+          <div class="question">
+            <p><span class="question-num">6.</span>
+              小明家到学校距离为 <strong>1.2千米</strong>，他步行速度为每分钟 <strong>60米</strong>，
+              需要走 <span class="blank-line"></span> 分钟才能到达学校。
+            </p>
+          </div>
+
+          <div class="question">
+            <p><span class="question-num">7.</span>
+              下面数据的平均数是 <span class="blank-line"></span>：
+              <strong>12、15、9、18、11</strong>
+            </p>
+          </div>
+        </div>
+
+        <!-- Section 3: 计算题 -->
+        <div class="exam-section section-3">
+          <div class="section-title">第三部分：计算题（每题12分，共24分）</div>
+
+          <div class="question">
+            <p><span class="question-num">8.</span> 计算下列各式（要求写出计算步骤）：</p>
+            <p style="padding-left:1rem;font-weight:600;">（1）3/5 ÷ 9/10 + 7/8 × 4/7</p>
+            <div class="calc-space">答题区（步骤）……</div>
+          </div>
+
+          <div class="question" style="margin-top:0.75rem;">
+            <p><span class="question-num">9.</span> 解方程：</p>
+            <p style="padding-left:1rem;font-weight:600;">3（2x − 4）= 5x + 8</p>
+            <div class="calc-space">答题区（步骤）……</div>
+          </div>
+        </div>
+
+        <!-- Section 4: 解答题 -->
+        <div class="exam-section section-4">
+          <div class="section-title">第四部分：解答题（每题16分，共32分）</div>
+
+          <div class="question">
+            <p><span class="question-num">10.</span>
+              某小学组织春游，共有 <strong>280名</strong> 同学参加，其中男生人数是女生人数的
+              <strong>3/4</strong>。请问男生和女生各有多少人？（请列方程解答）
+            </p>
+            <div class="calc-space" style="min-height:70px;">答题区……</div>
+          </div>
+
+          <div class="question" style="margin-top:0.75rem;">
+            <p><span class="question-num">11.</span>
+              一个圆柱形水桶，底面半径为 <strong>20cm</strong>，高为 <strong>30cm</strong>。
+              （π取3.14）<br>
+              ①求这个水桶的侧面积；<br>
+              ②若将水桶装满水，最多能装多少升水？（1升 = 1000立方厘米）
+            </p>
+            <div class="calc-space" style="min-height:80px;">答题区……</div>
+          </div>
+        </div>
+
+        <!-- Exam Actions -->
+        <div class="exam-actions">
+          <button class="exam-btn exam-btn-pdf">📥 下载 PDF</button>
+          <button class="exam-btn exam-btn-print">🖨️ 打印试卷</button>
+        </div>
+      </div><!-- /.exam-paper -->
+    </div><!-- /#exam-result -->
+
+  </main>
+</div><!-- /#app -->
+
+<script>
+/* 星场已由全局 bg.js 统一处理 */
+
+/* ============================
+   PANEL TOGGLE LOGIC
+   ============================ */
+function switchPanel(id, isManual) {
+  const autoEl   = document.getElementById('auto-'   + id);
+  const manualEl = document.getElementById('manual-' + id);
+  if (isManual) {
+    autoEl.classList.add('hidden');
+    manualEl.classList.remove('hidden');
+  } else {
+    autoEl.classList.remove('hidden');
+    manualEl.classList.add('hidden');
+  }
+}
+
+function switchPanelC(isOn) {
+  const onEl  = document.getElementById('panel-c-on');
+  const offEl = document.getElementById('panel-c-off');
+  const labelOn  = document.getElementById('label-on-c');
+  const labelOff = document.getElementById('label-off-c');
+  if (isOn) {
+    onEl.classList.remove('hidden');
+    offEl.classList.add('hidden');
+    labelOn.style.color  = 'var(--purple)';
+    labelOn.style.textShadow = '0 0 8px rgba(168,85,247,0.5)';
+    labelOff.style.color = 'var(--text-dim)';
+    labelOff.style.textShadow = 'none';
+  } else {
+    onEl.classList.add('hidden');
+    offEl.classList.remove('hidden');
+    labelOn.style.color  = 'var(--text-dim)';
+    labelOn.style.textShadow = 'none';
+    labelOff.style.color = 'var(--magenta)';
+    labelOff.style.textShadow = '0 0 8px rgba(255,45,120,0.4)';
+  }
+}
+
+/* ============================
+   CHIP TOGGLE
+   ============================ */
+function toggleChip(label) {
+  const cb = label.querySelector('input[type="checkbox"]');
+  // The click already fired on the label, toggling the checkbox
+  // We read the new state after toggle
+  setTimeout(() => {
+    if (cb.checked) {
+      label.classList.add('selected');
+    } else {
+      label.classList.remove('selected');
+    }
+  }, 0);
+}
+
+/* ============================
+   DIFFICULTY TOGGLE
+   ============================ */
+const diffDescMap = {
+  easy:   '以基础题为主，适合知识巩固练习',
+  medium: '平衡题型分布，适合期末综合复习',
+  hard:   '以提高题为主，适合竞赛冲刺训练'
+};
+
+function setDiff(level, btn) {
+  document.querySelectorAll('.diff-btn').forEach(b => {
+    b.className = 'diff-btn';
+  });
+  btn.classList.add('active-' + level);
+  document.getElementById('diff-desc').textContent = diffDescMap[level];
+}
+
+/* ============================
+   SCORE CALCULATION
+   ============================ */
+function updateScore() {
+  const checks = document.querySelectorAll('.type-options input[type="checkbox"]');
+  const checked = Array.from(checks).filter(c => c.checked).length;
+  const scoreMap = [0, 60, 80, 90, 100];
+  const noteMap  = ['', '1种题型', '2种题型', '3种题型', '4种题型 · 满分配置'];
+  const score = scoreMap[checked];
+  const note  = noteMap[checked];
+  document.getElementById('score-display').innerHTML =
+    score + '<span style="font-size:1rem;-webkit-text-fill-color:var(--text-dim)"> 分</span>';
+  document.getElementById('score-note').textContent = note;
+}
+
+/* ============================
+   GENERATE EXAM
+   ============================ */
+function generateExam() {
+  const btn = document.getElementById('btn-gen');
+  const btnText = document.getElementById('btn-text');
+
+  // Loading state
+  btn.classList.add('loading');
+  btnText.textContent = '生成中...';
+
+  setTimeout(() => {
+    // Done
+    btn.classList.remove('loading');
+    btnText.textContent = '重新生成';
+    btn.querySelector('.btn-icon').style.display = '';
+
+    // Reveal result
+    const result = document.getElementById('exam-result');
+    result.classList.add('revealed');
+    result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 2200);
+}
+
+/* ============================
+   INIT: auto-reveal exam on load
+   for demo purposes
+   ============================ */
+window.addEventListener('DOMContentLoaded', () => {
+  // Show exam result after a short delay to demo the page
+  setTimeout(() => {
+    document.getElementById('exam-result').classList.add('revealed');
+  }, 600);
+});
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

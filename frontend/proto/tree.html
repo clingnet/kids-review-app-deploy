@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识图谱 — 期末复习指挥舱</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0e1a;
+    color: #e0e8ff;
+    font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* ── scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+    animation: scanMove 8s linear infinite;
+  }
+  @keyframes scanMove {
+    0%   { background-position: 0 0; }
+    100% { background-position: 0 80px; }
+  }
+
+  /* ── nav bar ── */
+  nav {
+    position: relative;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 24px;
+    height: 56px;
+    background: rgba(10,14,26,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(45,226,230,0.25);
+    box-shadow: 0 0 24px rgba(45,226,230,0.08);
+  }
+  .nav-brand {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #2de2e6;
+    text-shadow: 0 0 12px #2de2e6, 0 0 24px rgba(45,226,230,0.5);
+    margin-right: 36px;
+    white-space: nowrap;
+  }
+  nav a {
+    text-decoration: none;
+    color: #8899cc;
+    font-size: 13px;
+    letter-spacing: 1px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    transition: all 0.25s;
+    position: relative;
+  }
+  nav a:hover, nav a.active {
+    color: #2de2e6;
+    text-shadow: 0 0 10px #2de2e6;
+    background: rgba(45,226,230,0.08);
+  }
+  nav a.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 16px; right: 16px;
+    height: 2px;
+    background: #2de2e6;
+    box-shadow: 0 0 8px #2de2e6;
+    border-radius: 2px;
+  }
+
+  /* ── update banner ── */
+  #updateBanner {
+    position: relative;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 10px 24px;
+    background: rgba(168,85,247,0.12);
+    border-bottom: 1px solid rgba(168,85,247,0.4);
+    animation: bannerPulse 2.5s ease-in-out infinite;
+  }
+  @keyframes bannerPulse {
+    0%,100% { box-shadow: 0 0 12px rgba(168,85,247,0.3); }
+    50%      { box-shadow: 0 0 28px rgba(168,85,247,0.6); }
+  }
+  .banner-text {
+    font-size: 13px;
+    color: #c9a8f7;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px rgba(168,85,247,0.6);
+  }
+  .banner-btn {
+    padding: 5px 16px;
+    border-radius: 20px;
+    border: 1px solid;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+    background: transparent;
+  }
+  .banner-btn-yes {
+    color: #2de2e6;
+    border-color: #2de2e6;
+  }
+  .banner-btn-yes:hover {
+    background: rgba(45,226,230,0.15);
+    box-shadow: 0 0 14px rgba(45,226,230,0.5);
+  }
+  .banner-btn-no {
+    color: #ff2d78;
+    border-color: #ff2d78;
+  }
+  .banner-btn-no:hover {
+    background: rgba(255,45,120,0.12);
+    box-shadow: 0 0 14px rgba(255,45,120,0.4);
+  }
+
+  /* ── filter bar ── */
+  #filterBar {
+    position: relative;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: rgba(10,14,26,0.7);
+    border-bottom: 1px solid rgba(45,226,230,0.10);
+    flex-wrap: wrap;
+  }
+  .filter-label {
+    font-size: 12px;
+    color: #4a5a8a;
+    letter-spacing: 1px;
+    margin-right: 4px;
+  }
+  .chip {
+    padding: 4px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(45,226,230,0.25);
+    font-size: 12px;
+    color: #7788bb;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    letter-spacing: 0.5px;
+  }
+  .chip:hover { color: #2de2e6; border-color: rgba(45,226,230,0.6); }
+  .chip.active {
+    color: #2de2e6;
+    border-color: #2de2e6;
+    background: rgba(45,226,230,0.10);
+    box-shadow: 0 0 10px rgba(45,226,230,0.25);
+  }
+  .filter-sep {
+    width: 1px; height: 20px;
+    background: rgba(45,226,230,0.15);
+    margin: 0 4px;
+  }
+
+  /* ── main layout ── */
+  #mainLayout {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    height: calc(100vh - 56px - 44px - 44px);
+    min-height: 500px;
+  }
+
+  /* ── graph area ── */
+  #graphArea {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  #graphCanvas {
+    display: block;
+    cursor: default;
+  }
+
+  /* ── detail panel ── */
+  #detailPanel {
+    width: 360px;
+    min-width: 300px;
+    background: rgba(10,14,30,0.82);
+    backdrop-filter: blur(20px);
+    border-left: 1px solid rgba(45,226,230,0.20);
+    box-shadow: -4px 0 40px rgba(45,226,230,0.06);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+    overflow-y: auto;
+  }
+  #detailPanel.open {
+    transform: translateX(0);
+  }
+
+  /* placeholder */
+  #detailPlaceholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 16px;
+    color: #334466;
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+  .placeholder-icon {
+    font-size: 48px;
+    opacity: 0.4;
+  }
+
+  /* panel content */
+  #detailContent { display: none; padding: 20px 20px 32px; }
+  #detailContent.visible { display: block; }
+
+  .detail-node-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .detail-mastery-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .mastery-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .mastery-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.25,0.8,0.25,1);
+  }
+  .mastery-pct {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .detail-section {
+    margin-bottom: 18px;
+  }
+  .detail-section-title {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    color: #4a6a9a;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(45,226,230,0.10);
+    padding-bottom: 5px;
+  }
+  .detail-section-title span {
+    margin-right: 4px;
+  }
+  .detail-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #99aad0;
+  }
+
+  .q-item {
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: rgba(45,226,230,0.04);
+    border: 1px solid rgba(45,226,230,0.12);
+    border-radius: 6px;
+    font-size: 12px;
+    color: #8899bb;
+    line-height: 1.5;
+  }
+
+  .wrong-item {
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255,45,120,0.05);
+    border: 1px solid rgba(255,45,120,0.2);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .wrong-q   { color: #8899bb; margin-bottom: 4px; }
+  .wrong-ans { color: #ff6090; }
+  .right-ans { color: #2de2e6; }
+
+  .ai-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #a855f7;
+    background: rgba(168,85,247,0.10);
+    color: #c9a8f7;
+    font-size: 14px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.25s;
+    text-align: center;
+    box-shadow: 0 0 16px rgba(168,85,247,0.15);
+    animation: aiPulse 3s ease-in-out infinite;
+  }
+  @keyframes aiPulse {
+    0%,100% { box-shadow: 0 0 16px rgba(168,85,247,0.20); }
+    50%      { box-shadow: 0 0 32px rgba(168,85,247,0.50); }
+  }
+  .ai-btn:hover {
+    background: rgba(168,85,247,0.20);
+    color: #e0c8ff;
+    box-shadow: 0 0 40px rgba(168,85,247,0.60);
+    transform: translateY(-1px);
+  }
+
+  /* ── float animation for misc elements ── */
+  @keyframes floatY {
+    0%,100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-brand">⬡ 期末复习指挥舱</div>
+  <a href="index.html">主页</a>
+  <a href="ai.html">AI 老师</a>
+</nav>
+
+<!-- Update banner -->
+<div id="updateBanner">
+  <span class="banner-text">🔔 检测到新分析结果，是否更新知识图谱？</span>
+  <button class="banner-btn banner-btn-yes" onclick="dismissBanner(true)">✓ 立即更新</button>
+  <button class="banner-btn banner-btn-no"  onclick="dismissBanner(false)">✗ 暂不更新</button>
+</div>
+
+<!-- Filter bar -->
+<div id="filterBar">
+  <span class="filter-label">科目</span>
+  <button class="chip active" data-group="subject" data-val="全部">全部</button>
+  <button class="chip" data-group="subject" data-val="数学">数学</button>
+  <button class="chip" data-group="subject" data-val="语文">语文</button>
+  <button class="chip" data-group="subject" data-val="英语">英语</button>
+  <button class="chip" data-group="subject" data-val="科学">科学</button>
+  <div class="filter-sep"></div>
+  <span class="filter-label">掌握度</span>
+  <button class="chip active" data-group="mastery" data-val="全部">全部</button>
+  <button class="chip" data-group="mastery" data-val="薄弱">薄弱</button>
+  <button class="chip" data-group="mastery" data-val="中等">中等</button>
+  <button class="chip" data-group="mastery" data-val="掌握">掌握</button>
+</div>
+
+<!-- Main layout -->
+<div id="mainLayout">
+  <div id="graphArea">
+    <canvas id="graphCanvas"></canvas>
+  </div>
+  <div id="detailPanel">
+    <div id="detailPlaceholder">
+      <div class="placeholder-icon">◈</div>
+      <div>← 点击左侧知识点节点查看详情</div>
+    </div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════════ */
+const NODES = [
+  { id:0, label:'分数加减法', subject:'数学', mastery:0.45,
+    x:0.18, y:0.28 },
+  { id:1, label:'分数乘除法', subject:'数学', mastery:0.30,
+    x:0.30, y:0.44 },
+  { id:2, label:'小数运算',   subject:'数学', mastery:0.72,
+    x:0.18, y:0.60 },
+  { id:3, label:'方程与未知数',subject:'数学', mastery:0.55,
+    x:0.42, y:0.30 },
+  { id:4, label:'面积与周长', subject:'数学', mastery:0.85,
+    x:0.42, y:0.68 },
+  { id:5, label:'统计与图表', subject:'数学', mastery:0.68,
+    x:0.58, y:0.48 },
+  { id:6, label:'古诗鉴赏',   subject:'语文', mastery:0.90,
+    x:0.72, y:0.20 },
+  { id:7, label:'阅读理解',   subject:'语文', mastery:0.65,
+    x:0.72, y:0.55 },
+  { id:8, label:'英语词汇',   subject:'英语', mastery:0.78,
+    x:0.85, y:0.35 },
+  { id:9, label:'科学实验',   subject:'科学', mastery:0.40,
+    x:0.85, y:0.70 },
+  { id:10,label:'时间与速度', subject:'数学', mastery:0.58,
+    x:0.58, y:0.80 },
+];
+
+const EDGES = [
+  [0,1],[0,2],[1,3],[2,4],[2,10],[3,5],[4,5],[5,10],
+  [6,7],[7,5],[8,6],[8,7],[9,5],[9,10]
+];
+
+const NODE_DETAIL = {
+  0: {
+    explain: '分数加减法是小学数学的核心内容，要求同分母直接相加减分子，异分母先通分再计算。通分时取分母的最小公倍数，化简时约分到最简分数。注意整数与分数混合运算时需先转化为假分数。',
+    questions: [
+      '1/3 + 1/4 = ？',
+      '5/6 − 2/9 = ？（先通分）',
+      '小明有 3/5 块蛋糕，吃掉了 1/4 块，还剩多少？'
+    ],
+    wrong: [
+      { q:'2/3 + 3/4 = ？', wa:'你的答案：5/7  ✗', ra:'正确答案：17/12 = 1又5/12' },
+      { q:'7/8 − 1/6 = ？', wa:'你的答案：6/2  ✗', ra:'正确答案：17/24' },
+    ]
+  },
+  2: {
+    explain: '小数运算包含加减乘除四则运算。加减法要对齐小数点；乘法先按整数乘再数小数位；除法将被除数除数同乘10的幂次使除数变整数。混合运算遵循"先乘除后加减，有括号先算括号"的顺序。',
+    questions: [
+      '3.14 × 5 = ？',
+      '12.6 ÷ 0.3 = ？',
+      '一根绳子长 8.4 米，剪去 2.75 米，还剩多少米？'
+    ],
+    wrong: [
+      { q:'0.25 × 0.4 = ？', wa:'你的答案：1.0  ✗', ra:'正确答案：0.1' },
+      { q:'5.6 ÷ 0.08 = ？', wa:'你的答案：0.7  ✗', ra:'正确答案：70' },
+    ]
+  },
+  6: {
+    explain: '古诗鉴赏要求理解诗歌的意象、意境与情感。学习时注意诗题与背景、重要意象（如"月"代思乡，"松"象高洁），体会押韵与对仗带来的音乐美感，并能结合时代背景分析作者情感。',
+    questions: [
+      '《静夜思》中"举头望明月"下一句是什么？',
+      '"春眠不觉晓，处处闻啼鸟"出自哪首诗？作者是谁？',
+      '请解释"野旷天低树，江清月近人"所描绘的意境。'
+    ],
+    wrong: [
+      { q:'"两个黄鹂鸣翠柳"的下一句是什么？', wa:'你的答案：一行白鹭入云来 ✗', ra:'正确答案：一行白鹭上青天' },
+    ]
+  }
+};
+
+function getDefaultDetail(node) {
+  return {
+    explain: `${node.label}是${node.subject}课程中的重要知识点。掌握该知识点需要理解基本概念、熟悉解题方法，并通过大量练习形成稳固的知识体系。建议重点关注易错点和典型题型，加强针对性训练。`,
+    questions: [
+      `${node.label} 基础练习题第1题（示例）`,
+      `${node.label} 综合应用题第2题（示例）`,
+      `${node.label} 拓展思维题第3题（示例）`
+    ],
+    wrong: [
+      { q:`${node.label} 易错题示例`, wa:'你的答案：错误选项 ✗', ra:'正确答案：正确选项' },
+    ]
+  };
+}
+
+/* 星场已由全局 bg.js 统一处理 */
+
+/* ═══════════════════════════════════════════════════
+   BANNER
+═══════════════════════════════════════════════════ */
+function dismissBanner(update) {
+  const b = document.getElementById('updateBanner');
+  b.style.transition = 'opacity 0.4s, max-height 0.4s, padding 0.4s';
+  b.style.opacity = '0';
+  b.style.maxHeight = '0';
+  b.style.padding = '0';
+  b.style.overflow = 'hidden';
+  setTimeout(() => b.style.display = 'none', 420);
+  if (update) {
+    // simulate update feedback — brief flash
+    document.body.style.boxShadow = 'inset 0 0 60px rgba(45,226,230,0.25)';
+    setTimeout(() => document.body.style.boxShadow = '', 600);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   FILTER CHIPS
+═══════════════════════════════════════════════════ */
+let activeFilters = { subject:'全部', mastery:'全部' };
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', function() {
+    const group = this.dataset.group;
+    const val   = this.dataset.val;
+    document.querySelectorAll(`.chip[data-group="${group}"]`).forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    activeFilters[group] = val;
+    applyFilters();
+  });
+});
+
+function masteryCategory(m) {
+  if (m < 0.60) return '薄弱';
+  if (m < 0.76) return '中等';
+  return '掌握';
+}
+
+function applyFilters() {
+  NODES.forEach(n => {
+    const subOk = activeFilters.subject === '全部' || n.subject === activeFilters.subject;
+    const mOk   = activeFilters.mastery === '全部' || masteryCategory(n.mastery) === activeFilters.mastery;
+    n.hidden = !(subOk && mOk);
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   GRAPH CANVAS
+═══════════════════════════════════════════════════ */
+const graphCanvas = document.getElementById('graphCanvas');
+const gctx = graphCanvas.getContext('2d');
+const graphArea = document.getElementById('graphArea');
+
+const NODE_R = 42;
+let selectedNode = null;
+let animT = 0;
+
+function nodeColor(mastery) {
+  if (mastery < 0.60) return { core:'#ff2d78', glow:'rgba(255,45,120,' };
+  if (mastery < 0.76) return { core:'#f59e0b', glow:'rgba(245,158,11,' };
+  return { core:'#2de2e6', glow:'rgba(45,226,230,' };
+}
+
+function resizeGraph() {
+  graphCanvas.width  = graphArea.clientWidth;
+  graphCanvas.height = graphArea.clientHeight;
+}
+
+function nodeScreenPos(node) {
+  return {
+    x: node.x * graphCanvas.width,
+    y: node.y * graphCanvas.height,
+  };
+}
+
+function drawGraph(t) {
+  const W = graphCanvas.width, H = graphCanvas.height;
+  gctx.clearRect(0, 0, W, H);
+
+  // Draw edges
+  EDGES.forEach(([a, b]) => {
+    const na = NODES[a], nb = NODES[b];
+    if (na.hidden || nb.hidden) return;
+    const pa = nodeScreenPos(na), pb = nodeScreenPos(nb);
+
+    gctx.save();
+    gctx.beginPath();
+    gctx.moveTo(pa.x, pa.y);
+    gctx.lineTo(pb.x, pb.y);
+
+    const grad = gctx.createLinearGradient(pa.x, pa.y, pb.x, pb.y);
+    grad.addColorStop(0,   `rgba(45,226,230,0.18)`);
+    grad.addColorStop(0.5, `rgba(168,85,247,0.12)`);
+    grad.addColorStop(1,   `rgba(45,226,230,0.18)`);
+    gctx.strokeStyle = grad;
+    gctx.lineWidth = 1.5;
+    gctx.setLineDash([6, 6]);
+    // animate dash offset
+    gctx.lineDashOffset = -(t * 18) % 24;
+    gctx.stroke();
+    gctx.restore();
+  });
+
+  // Draw nodes
+  NODES.forEach(node => {
+    if (node.hidden) return;
+    const pos = nodeScreenPos(node);
+    const col = nodeColor(node.mastery);
+    const isSelected = selectedNode && selectedNode.id === node.id;
+
+    // pulse factor
+    const pulse = 0.5 + 0.5 * Math.sin(t * 1.6 + node.id * 0.7);
+
+    gctx.save();
+
+    // outer glow
+    const glowR = NODE_R + 18 + (isSelected ? 12 : pulse * 6);
+    const glowAlpha = isSelected ? 0.6 : 0.2 + pulse * 0.15;
+    const radGlow = gctx.createRadialGradient(pos.x, pos.y, NODE_R * 0.5, pos.x, pos.y, glowR);
+    radGlow.addColorStop(0, col.glow + glowAlpha + ')');
+    radGlow.addColorStop(1, col.glow + '0)');
+    gctx.beginPath();
+    gctx.arc(pos.x, pos.y, glowR, 0, Math.PI * 2);
+    gctx.fillStyle = radGlow;
+    gctx.fill();
+
+    // node circle fill
+    const radFill = gctx.createRadialGradient(pos.x - NODE_R * 0.3, pos.y - NODE_R * 0.3, 4, pos.x, pos.y, NODE_R);
+    radFill.addColorStop(0, col.glow + '0.28)');
+    radFill.addColorStop(1, 'rgba(10,14,26,0.88)');
+    gctx.beginPath();
+    gctx.arc(pos.x, pos.y, NODE_R, 0, Math.PI * 2);
+    gctx.fillStyle = radFill;
+    gctx.fill();
+
+    // node border
+    gctx.beginPath();
+    gctx.arc(pos.x, pos.y, NODE_R, 0, Math.PI * 2);
+    gctx.strokeStyle = isSelected ? col.core : col.glow + (0.5 + pulse * 0.3) + ')';
+    gctx.lineWidth = isSelected ? 2.5 : 1.5;
+    if (isSelected) gctx.shadowBlur = 20, gctx.shadowColor = col.core;
+    gctx.stroke();
+    gctx.shadowBlur = 0;
+
+    // mastery arc
+    gctx.beginPath();
+    gctx.arc(pos.x, pos.y, NODE_R - 5, -Math.PI/2, -Math.PI/2 + node.mastery * 2 * Math.PI);
+    gctx.strokeStyle = col.core;
+    gctx.lineWidth = 2.5;
+    gctx.stroke();
+
+    // label
+    const lines = splitLabel(node.label, 5);
+    gctx.font = `bold ${lines.length > 1 ? 11 : 12}px PingFang SC, Microsoft YaHei, sans-serif`;
+    gctx.textAlign = 'center';
+    gctx.textBaseline = 'middle';
+    gctx.fillStyle = '#e0e8ff';
+    gctx.shadowBlur = 8;
+    gctx.shadowColor = col.core;
+    const lineH = 15;
+    const startY = pos.y - ((lines.length - 1) * lineH) / 2;
+    lines.forEach((line, i) => {
+      gctx.fillText(line, pos.x, startY + i * lineH);
+    });
+    gctx.shadowBlur = 0;
+
+    // mastery % below
+    gctx.font = `10px monospace`;
+    gctx.fillStyle = col.glow + '0.85)';
+    gctx.shadowBlur = 4; gctx.shadowColor = col.core;
+    gctx.fillText(Math.round(node.mastery * 100) + '%', pos.x, pos.y + NODE_R + 11);
+    gctx.shadowBlur = 0;
+
+    gctx.restore();
+  });
+}
+
+function splitLabel(str, maxLen) {
+  if (str.length <= maxLen) return [str];
+  const mid = Math.ceil(str.length / 2);
+  return [str.slice(0, mid), str.slice(mid)];
+}
+
+/* ── click detection ── */
+graphCanvas.addEventListener('click', function(e) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  let hit = null;
+  for (const node of NODES) {
+    if (node.hidden) continue;
+    const pos = nodeScreenPos(node);
+    const dx = mx - pos.x, dy = my - pos.y;
+    if (dx*dx + dy*dy <= NODE_R * NODE_R) { hit = node; break; }
+  }
+
+  if (hit) {
+    selectedNode = hit;
+    openDetailPanel(hit);
+  } else {
+    selectedNode = null;
+  }
+});
+
+graphCanvas.addEventListener('mousemove', function(e) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let over = false;
+  for (const node of NODES) {
+    if (node.hidden) continue;
+    const pos = nodeScreenPos(node);
+    const dx = mx - pos.x, dy = my - pos.y;
+    if (dx*dx + dy*dy <= NODE_R * NODE_R) { over = true; break; }
+  }
+  graphCanvas.style.cursor = over ? 'pointer' : 'default';
+});
+
+/* ── animation loop ── */
+function loop(ts) {
+  animT = ts / 1000;
+  drawGraph(animT);
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize', () => {
+  resizeGraph();
+});
+
+/* init */
+resizeGraph();
+requestAnimationFrame(loop);
+
+/* ═══════════════════════════════════════════════════
+   DETAIL PANEL
+═══════════════════════════════════════════════════ */
+const detailPanel  = document.getElementById('detailPanel');
+const detailPH     = document.getElementById('detailPlaceholder');
+const detailContent= document.getElementById('detailContent');
+
+function masteryColorCSS(m) {
+  if (m < 0.60) return '#ff2d78';
+  if (m < 0.76) return '#f59e0b';
+  return '#2de2e6';
+}
+function masteryLabel(m) {
+  if (m < 0.60) return '薄弱';
+  if (m < 0.76) return '中等';
+  return '掌握';
+}
+
+function openDetailPanel(node) {
+  const data = NODE_DETAIL[node.id] || getDefaultDetail(node);
+  const col  = masteryColorCSS(node.mastery);
+  const pct  = Math.round(node.mastery * 100);
+
+  const questionsHTML = data.questions.map(q =>
+    `<div class="q-item">● ${escHtml(q)}</div>`
+  ).join('');
+
+  const wrongHTML = data.wrong.map(w => `
+    <div class="wrong-item">
+      <div class="wrong-q">Q：${escHtml(w.q)}</div>
+      <div class="wrong-ans">${escHtml(w.wa)}</div>
+      <div class="right-ans">${escHtml(w.ra)}</div>
+    </div>
+  `).join('');
+
+  detailContent.innerHTML = `
+    <div class="detail-node-title" style="color:${col};text-shadow:0 0 12px ${col}">
+      ${escHtml(node.label)}
+    </div>
+    <div style="font-size:11px;color:#4a6a9a;margin-bottom:10px;letter-spacing:1px">${node.subject}</div>
+    <div class="detail-mastery-row">
+      <div class="mastery-bar-wrap">
+        <div class="mastery-bar-fill" style="width:${pct}%;background:${col};box-shadow:0 0 8px ${col}"></div>
+      </div>
+      <div class="mastery-pct" style="color:${col}">${pct}%</div>
+      <div style="font-size:11px;color:${col};letter-spacing:1px">${masteryLabel(node.mastery)}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title"><span>📖</span>知识点详解</div>
+      <div class="detail-text">${escHtml(data.explain)}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title"><span>📝</span>出过的题目</div>
+      ${questionsHTML}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title"><span>❌</span>做错过的题目</div>
+      ${wrongHTML}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title"><span>🤖</span>AI 辅导</div>
+      <button class="ai-btn" onclick="chatWithAI('${escHtml(node.label)}')">
+        🤖 和 AI 老师讨论这个知识点
+      </button>
+    </div>
+  `;
+
+  detailPH.style.display = 'none';
+  detailContent.classList.add('visible');
+  detailPanel.classList.add('open');
+}
+
+function chatWithAI(topic) {
+  alert(`即将跳转到 AI 对话页面，话题：${topic}\n（功能开发中）`);
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+/* Keep graph sized when panel opens/closes */
+detailPanel.addEventListener('transitionend', () => resizeGraph());
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+# 一键起：docker compose up -d --build
+# 迁移：拷贝整个目录（含 ./data 卷数据）到新机器，再 docker compose up 即可。
+services:
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data          # SQLite + 上传图片 + 生成文件，全部在挂载卷
+    restart: unless-stopped
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - backend
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    ports:
+      - "8080:80"             # 本机/SSH 隧道:http://<host>:8080
+      - "443:443"             # 公网 HTTPS + 自动 Let's Encrypt(需 AWS 安全组放行 443)
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend:/srv:ro
+      - caddy_data:/data      # 证书持久化(勿删,否则重新签发)
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

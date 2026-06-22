@@ -1,0 +1,46 @@
+{
+	# 保留证书自动管理,但不自动把 :80 重定向到 :443(把 :80 留给 SSH 隧道用)
+	auto_https disable_redirects
+}
+
+# 公网:免费域名 + Let's Encrypt 正式证书(TLS-ALPN-01,只需 443 放行)
+3-138-198-65.nip.io {
+	encode gzip
+	request_body {
+		max_size 100MB
+	}
+	# 访问密码(公网保护孩子数据)
+	basicauth {
+		review <用 docker run --rm caddy caddy hash-password --plaintext 你的密码 生成的哈希>
+	}
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /ws/* {
+		reverse_proxy backend:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# 本机/SSH 隧道(8080->80),无密码
+:80 {
+	encode gzip
+	request_body {
+		max_size 100MB
+	}
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /ws/* {
+		reverse_proxy backend:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

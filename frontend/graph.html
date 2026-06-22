@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>知识图谱 — 期末复习指挥舱</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0e1a; --cyan: #2de2e6; --purple: #a855f7; --magenta: #ff2d78;
+    --glass-bg: rgba(10,20,50,.58); --glass-border: rgba(45,226,230,.22);
+    --text: #c8e6f8; --text-dim: #5a7fa0; --radius: 16px;
+  }
+  html, body { height:100%; background:var(--bg); color:var(--text);
+    font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; overflow:hidden; overflow-x:hidden; }
+  body::before { content:''; position:fixed; inset:0;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);
+    pointer-events:none; z-index:1000; animation:scanMove 8s linear infinite; }
+  @keyframes scanMove { 0%{background-position:0 0;} 100%{background-position:0 80px;} }
+  #app { position:relative; z-index:2; height:100vh; height:100dvh; display:flex; flex-direction:column; }
+  nav { display:flex; align-items:center; justify-content:space-between; padding:0 28px;
+    padding-top:env(safe-area-inset-top); height:calc(54px + env(safe-area-inset-top)); flex-shrink:0;
+    background:rgba(10,14,26,.88); backdrop-filter:blur(16px); border-bottom:1px solid var(--glass-border); }
+  .nav-brand { font-size:1.1rem; font-weight:700; letter-spacing:.06em;
+    background:linear-gradient(90deg,var(--cyan),var(--purple),var(--magenta));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    filter:drop-shadow(0 0 6px rgba(45,226,230,.4)); white-space:nowrap; }
+  .nav-links { display:flex; gap:5px; }
+  .nav-links a { color:var(--text-dim); text-decoration:none; padding:5px 16px; border-radius:20px; font-size:.84rem; border:1px solid transparent; transition:all .25s; }
+  .nav-links a:hover,.nav-links a.active { color:var(--cyan); border-color:var(--cyan); background:rgba(45,226,230,.08); box-shadow:0 0 10px rgba(45,226,230,.25); }
+  .nav-right { display:flex; align-items:center; gap:12px; }
+  .upload-btn-nav { padding:6px 16px; border-radius:20px; font-size:.82rem; font-weight:600; cursor:pointer; font-family:inherit; transition:all .22s;
+    background:linear-gradient(135deg,rgba(255,45,120,.15),rgba(168,85,247,.15)); border:1px solid rgba(255,45,120,.45); color:var(--magenta); box-shadow:0 0 12px rgba(255,45,120,.2); }
+  .upload-btn-nav:hover { background:linear-gradient(135deg,rgba(255,45,120,.25),rgba(168,85,247,.22)); box-shadow:0 0 22px rgba(255,45,120,.4); }
+  /* 上传进度 banner */
+  #upload-banner { flex-shrink:0; position:relative; overflow:hidden; padding:10px 28px; display:none; align-items:center; gap:16px;
+    background:linear-gradient(90deg,rgba(255,45,120,.07),rgba(168,85,247,.1),rgba(45,226,230,.07)); border-bottom:1px solid rgba(168,85,247,.35); }
+  #upload-banner.visible { display:flex; }
+  #upload-banner::before { content:''; position:absolute; top:0; left:-60%; width:40%; height:100%;
+    background:linear-gradient(90deg,transparent,rgba(168,85,247,.3),transparent); animation:bannerScan 2.5s linear infinite; }
+  @keyframes bannerScan { to{left:130%;} }
+  .banner-text { flex:1; font-size:.85rem; color:#c9a8f7; letter-spacing:.04em; }
+  .banner-close { background:none; border:1px solid rgba(255,255,255,.15); color:var(--text-dim); border-radius:6px; padding:3px 10px; font-size:.75rem; cursor:pointer; }
+  .banner-close:hover { border-color:var(--cyan); color:var(--cyan); }
+  /* 筛选栏 */
+  #filter-bar { flex-shrink:0; display:flex; align-items:center; gap:10px; padding:8px 20px;
+    background:rgba(10,14,26,.7); border-bottom:1px solid rgba(45,226,230,.1); flex-wrap:wrap; }
+  .filter-label { font-size:.7rem; color:var(--text-dim); letter-spacing:.1em; }
+  .chip { padding:4px 13px; border-radius:20px; border:1px solid rgba(45,226,230,.22); font-size:.78rem; color:var(--text-dim); cursor:pointer; transition:all .2s; background:transparent; font-family:inherit; }
+  .chip:hover { color:var(--cyan); border-color:rgba(45,226,230,.5); }
+  .chip.active { color:var(--cyan); border-color:var(--cyan); background:rgba(45,226,230,.1); box-shadow:0 0 8px rgba(45,226,230,.2); }
+  .filter-sep { width:1px; height:18px; background:rgba(45,226,230,.14); }
+  #main-layout { flex:1; display:flex; overflow:hidden; min-height:0; }
+  #graph-area { flex:1; position:relative; overflow:auto; -webkit-overflow-scrolling:touch; }
+  /* 知识点卡片列表(手机用,桌面隐藏) */
+  #kp-grid { display:none; }
+  .kp-card { display:flex; align-items:center; gap:12px; padding:13px 14px; margin-bottom:10px;
+    background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:12px; cursor:pointer;
+    transition:all .18s; }
+  .kp-card:active { transform:scale(.99); }
+  .kp-card .kp-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+  .kp-card .kp-main { flex:1; min-width:0; }
+  .kp-card .kp-name { font-size:.95rem; color:#e0f0ff; font-weight:600; }
+  .kp-card .kp-sub { font-size:.7rem; color:var(--text-dim); margin-top:1px; }
+  .kp-card .kp-bar { height:5px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; margin-top:6px; }
+  .kp-card .kp-bar > i { display:block; height:100%; border-radius:3px; }
+  .kp-card .kp-pct { font-size:.82rem; font-weight:700; flex-shrink:0; min-width:38px; text-align:right; }
+  .kp-card .kp-go { color:var(--text-dim); font-size:1.1rem; flex-shrink:0; }
+  #kp-grid-empty { text-align:center; color:var(--text-dim); padding:48px 20px; font-size:.88rem; }
+  #graphCanvas { display:block; cursor:default; }
+  /* 空状态叠加 */
+  #graph-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; color:var(--text-dim); font-size:.9rem; display:none; }
+  #graph-empty.visible { display:flex; }
+  .empty-icon-lg { font-size:3rem; opacity:.3; }
+  .upload-hint-btn { padding:8px 24px; border-radius:12px; font-size:.88rem; font-weight:600; cursor:pointer; font-family:inherit;
+    background:linear-gradient(135deg,rgba(255,45,120,.15),rgba(168,85,247,.12)); border:1px solid rgba(255,45,120,.4); color:var(--magenta); transition:all .2s; }
+  .upload-hint-btn:hover { box-shadow:0 0 18px rgba(255,45,120,.3); }
+  /* 详情面板 */
+  #detail-panel { width:360px; min-width:300px; flex-shrink:0;
+    background:rgba(10,14,30,.85); backdrop-filter:blur(22px); border-left:1px solid rgba(45,226,230,.18);
+    display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform .35s cubic-bezier(.25,.8,.25,1);
+    position:relative; overflow-y:auto; overflow-x:hidden; }
+  #detail-panel.open { transform:translateX(0); }
+  #detail-panel::-webkit-scrollbar { width:3px; }
+  #detail-panel::-webkit-scrollbar-thumb { background:rgba(45,226,230,.2); }
+  #detail-ph { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:14px; color:#2a3a5a; font-size:.85rem; letter-spacing:1px; }
+  .ph-icon { font-size:3rem; opacity:.35; }
+  #detail-content { display:none; padding:20px 20px 32px; }
+  #detail-content.visible { display:block; }
+  .det-title { font-size:1.15rem; font-weight:700; letter-spacing:1px; margin-bottom:4px; }
+  .det-subj  { font-size:.7rem; color:#4a6a9a; letter-spacing:1.5px; margin-bottom:12px; text-transform:uppercase; }
+  .mastery-row { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .mastery-track { flex:1; height:6px; background:rgba(255,255,255,.07); border-radius:3px; overflow:hidden; }
+  .mastery-fill  { height:100%; border-radius:3px; transition:width .6s cubic-bezier(.25,.8,.25,1); }
+  .mastery-pct   { font-size:.78rem; font-weight:700; min-width:36px; text-align:right; }
+  .det-section { margin-bottom:16px; }
+  .det-sec-title { font-size:.68rem; letter-spacing:1.5px; color:#4a6a9a; text-transform:uppercase; margin-bottom:7px; border-bottom:1px solid rgba(45,226,230,.1); padding-bottom:4px; }
+  .det-text { font-size:.83rem; line-height:1.75; color:#99aad0; }
+  .q-item { padding:7px 11px; margin-bottom:5px; background:rgba(45,226,230,.04); border:1px solid rgba(45,226,230,.12); border-radius:6px; font-size:.8rem; color:#8899bb; line-height:1.5; }
+  .wrong-item { padding:9px 11px; margin-bottom:7px; background:rgba(255,45,120,.05); border:1px solid rgba(255,45,120,.2); border-radius:6px; }
+  .wrong-q   { font-size:.8rem; color:#8899bb; margin-bottom:4px; }
+  .wrong-ans { font-size:.78rem; color:#ff6090; }
+  .right-ans { font-size:.78rem; color:var(--cyan); }
+  .ai-btn { display:block; width:100%; padding:13px; border-radius:10px; border:1px solid var(--purple);
+    background:rgba(168,85,247,.1); color:#c9a8f7; font-size:.88rem; letter-spacing:1px; cursor:pointer; transition:all .25s;
+    text-align:center; box-shadow:0 0 16px rgba(168,85,247,.15); animation:aiPulse 3s ease-in-out infinite; font-family:inherit; }
+  @keyframes aiPulse { 0%,100%{box-shadow:0 0 16px rgba(168,85,247,.2);} 50%{box-shadow:0 0 30px rgba(168,85,247,.5);} }
+  .ai-btn:hover { background:rgba(168,85,247,.22); color:#e0c8ff; transform:translateY(-1px); box-shadow:0 0 36px rgba(168,85,247,.55); }
+  /* detail loading */
+  .det-loading { text-align:center; padding:30px; color:var(--text-dim); font-size:.82rem; }
+  .spin { display:inline-block; width:18px; height:18px; border:2px solid rgba(45,226,230,.3); border-top-color:var(--cyan); border-radius:50%; animation:spin .7s linear infinite; margin-bottom:8px; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  /* 报告区 */
+  #report-area { flex-shrink:0; border-top:1px solid rgba(45,226,230,.12); background:rgba(10,14,26,.7); max-height:0; overflow:hidden; transition:max-height .4s ease; }
+  #report-area.open { max-height:240px; overflow-y:auto; }
+  .report-toggle { display:flex; align-items:center; gap:8px; padding:8px 20px; cursor:pointer; font-size:.75rem; color:var(--text-dim);
+    border-top:1px solid rgba(45,226,230,.1); background:rgba(10,14,26,.6); user-select:none; flex-shrink:0; transition:color .2s; }
+  .report-toggle:hover { color:var(--cyan); }
+  .report-inner { padding:14px 20px 18px; }
+  .report-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+  .rep-card { padding:12px 14px; background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:12px; text-align:center; }
+  .rep-val { font-size:1.5rem; font-weight:800; background:linear-gradient(135deg,var(--cyan),var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .rep-lbl { font-size:.65rem; color:var(--text-dim); letter-spacing:.08em; text-transform:uppercase; margin-top:3px; }
+  .rep-weak { padding:10px 14px; background:var(--glass-bg); border:1px solid rgba(255,45,120,.2); border-radius:10px; }
+  .rep-weak-title { font-size:.7rem; color:var(--text-dim); letter-spacing:.1em; text-transform:uppercase; margin-bottom:7px; }
+  .weak-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .weak-chip { padding:3px 10px; border-radius:10px; font-size:.75rem; border:1px solid rgba(255,45,120,.3); color:var(--magenta); background:rgba(255,45,120,.07); }
+  /* ── 手机端(≤640px)专项适配 ── */
+  /* 返回/关闭按钮(仅浮层/全屏模式显示) */
+  #detail-close { display:none; position:sticky; top:0; z-index:5; width:100%;
+    background:rgba(10,14,30,.96); border:none; border-bottom:1px solid rgba(45,226,230,.18);
+    color:var(--cyan); font-family:inherit; font-size:.9rem; font-weight:600;
+    padding:12px 16px; text-align:left; cursor:pointer; }
+
+  /* ── 中屏(平板等 ≤1023):图谱占满全宽,详情改为右侧浮层,不占用图谱宽度 ── */
+  @media (max-width: 1023px) {
+    #detail-panel {
+      position:fixed; top:0; right:0; bottom:0; left:auto;
+      width:min(400px, 92vw); min-width:0; height:100%;
+      border-left:1px solid rgba(45,226,230,.25); border-radius:0;
+      transform:translateX(100%);
+      transition:transform .35s cubic-bezier(.25,.8,.25,1);
+      z-index:200; box-shadow:-14px 0 44px rgba(0,0,0,.55);
+      padding-bottom:env(safe-area-inset-bottom);
+    }
+    #detail-panel.open { transform:translateX(0); }
+    #detail-close { display:block; }
+  }
+
+  /* ── 小屏(手机 ≤699):图谱→知识点列表;点开进二级全屏页 ── */
+  @media (max-width: 699px) {
+    nav { padding:8px 12px; padding-top:max(8px, env(safe-area-inset-top)); height:auto; flex-wrap:wrap; gap:6px; }
+    .nav-brand { font-size:1rem; }
+    .nav-links a { padding:4px 10px; font-size:.78rem; }
+    .upload-btn-nav { padding:5px 12px; font-size:.78rem; }
+    #filter-bar { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;
+      padding:8px 12px; scrollbar-width:none; }
+    #filter-bar::-webkit-scrollbar { display:none; }
+    #graph-area { display:none !important; }
+    #kp-grid { display:block; flex:1; overflow:auto; -webkit-overflow-scrolling:touch;
+      padding:14px 14px calc(24px + env(safe-area-inset-bottom)); }
+    /* 详情 → 全屏二级页(从右滑入) */
+    #detail-panel { width:100%; max-width:none; box-shadow:none; }
+    #detail-close { font-size:.95rem; padding:14px 16px; }
+    .report-toggle, #report-area { padding-bottom:env(safe-area-inset-bottom); }
+    #upload-pill { bottom:calc(20px + env(safe-area-inset-bottom)); right:16px; }
+  }
+  /* 上传 Modal */
+  .modal-overlay { position:fixed; inset:0; z-index:300; background:rgba(5,8,20,.82); backdrop-filter:blur(10px);
+    display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .3s; }
+  .modal-overlay.open { opacity:1; pointer-events:all; }
+  .modal { background:rgba(10,18,42,.96); border:1px solid rgba(45,226,230,.4); border-radius:20px; padding:34px 38px; width:min(480px,92vw); box-shadow:0 0 60px rgba(45,226,230,.2); position:relative; }
+  .modal-title { font-size:1.1rem; font-weight:700; margin-bottom:18px; background:linear-gradient(90deg,var(--magenta),var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .drop-zone { border:2px dashed rgba(255,45,120,.3); border-radius:12px; padding:38px 20px; text-align:center; cursor:pointer; transition:all .2s; background:rgba(255,45,120,.03); }
+  .drop-zone:hover { border-color:var(--magenta); background:rgba(255,45,120,.07); box-shadow:0 0 18px rgba(255,45,120,.12); }
+  .dz-icon { font-size:2.4rem; margin-bottom:10px; }
+  .dz-text { font-size:.9rem; color:var(--text-dim); }
+  .dz-hint { font-size:.73rem; color:var(--text-dim); margin-top:6px; }
+  .modal-close { position:absolute; top:14px; right:18px; background:none; border:none; color:var(--text-dim); font-size:1.2rem; cursor:pointer; transition:color .2s; }
+  .modal-close:hover { color:var(--cyan); }
+  .modal-minimize { position:absolute; top:14px; right:52px; background:none; border:1px solid rgba(45,226,230,.3); color:var(--text-dim); font-size:.8rem; padding:3px 9px; border-radius:8px; cursor:pointer; transition:all .2s; white-space:nowrap; }
+  .modal-minimize:hover { border-color:var(--cyan); color:var(--cyan); box-shadow:0 0 8px rgba(45,226,230,.25); }
+  #upload-status { margin-top:12px; font-size:.82rem; color:var(--text-dim); text-align:center; }
+  .upload-progress { margin-top:10px; height:4px; background:rgba(255,255,255,.08); border-radius:2px; overflow:hidden; display:none; }
+  .upload-progress.visible { display:block; }
+  .upload-prog-fill { height:100%; background:linear-gradient(90deg,var(--magenta),var(--purple)); border-radius:2px; transition:width .3s; width:0%; }
+  /* 最小化浮窗 */
+  #upload-pill {
+    position:fixed; bottom:28px; right:28px; z-index:400;
+    display:none; flex-direction:column; gap:6px;
+    background:rgba(10,14,30,.96); border:1px solid rgba(168,85,247,.5);
+    border-radius:16px; padding:14px 18px 12px; min-width:200px; max-width:260px;
+    box-shadow:0 0 28px rgba(168,85,247,.35), 0 8px 32px rgba(0,0,0,.5);
+    cursor:pointer; transition:box-shadow .2s;
+    animation:pillGlow 2.5s ease-in-out infinite;
+  }
+  @keyframes pillGlow {
+    0%,100% { box-shadow:0 0 18px rgba(168,85,247,.3),0 8px 24px rgba(0,0,0,.5); }
+    50%      { box-shadow:0 0 36px rgba(168,85,247,.6),0 8px 32px rgba(0,0,0,.5); }
+  }
+  #upload-pill.visible { display:flex; }
+  .pill-header { display:flex; align-items:center; gap:8px; font-size:.82rem; color:#c9a8f7; font-weight:600; }
+  .pill-dots { display:flex; gap:3px; }
+  .pill-dot { width:5px; height:5px; border-radius:50%; background:var(--purple); animation:dotPulse 1.2s ease-in-out infinite; }
+  .pill-dot:nth-child(2) { animation-delay:.2s; }
+  .pill-dot:nth-child(3) { animation-delay:.4s; }
+  @keyframes dotPulse { 0%,100%{opacity:.3;transform:scale(.9);} 50%{opacity:1;transform:scale(1.2);} }
+  .pill-bar-track { height:3px; background:rgba(255,255,255,.08); border-radius:2px; overflow:hidden; }
+  .pill-bar-fill { height:100%; border-radius:2px; background:linear-gradient(90deg,var(--magenta),var(--purple)); transition:width .4s; width:0%; }
+  .pill-hint { font-size:.68rem; color:var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <nav>
+    <div class="nav-brand">⚡ 期末复习指挥舱</div>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="graph.html" class="active">知识图谱</a>
+      <a href="teacher.html">AI 老师</a>
+    </div>
+    <div class="nav-right">
+      <button class="upload-btn-nav" onclick="openUpload()">📤 上传试卷 / 错题</button>
+    </div>
+  </nav>
+
+  <div id="upload-banner">
+    <span class="banner-text" id="banner-text">⚡ 正在分析试卷… 知识图谱和薄弱点稍后更新</span>
+    <button class="banner-close" onclick="closeBanner()">✕</button>
+  </div>
+
+  <div id="filter-bar">
+    <span class="filter-label">科目</span>
+    <button class="chip active" data-group="subject" data-val="全部">全部</button>
+    <button class="chip" data-group="subject" data-val="数学">数学</button>
+    <button class="chip" data-group="subject" data-val="语文">语文</button>
+    <button class="chip" data-group="subject" data-val="英语">英语</button>
+    <button class="chip" data-group="subject" data-val="科学">科学</button>
+    <div class="filter-sep"></div>
+    <span class="filter-label">掌握度</span>
+    <button class="chip active" data-group="mastery" data-val="全部">全部</button>
+    <button class="chip" data-group="mastery" data-val="薄弱">薄弱</button>
+    <button class="chip" data-group="mastery" data-val="中等">中等</button>
+    <button class="chip" data-group="mastery" data-val="掌握">掌握</button>
+  </div>
+
+  <div id="main-layout">
+    <div id="graph-area">
+      <canvas id="graphCanvas"></canvas>
+      <div id="graph-empty">
+        <div class="empty-icon-lg">🌐</div>
+        <div>暂无知识图谱数据</div>
+        <div style="font-size:.8rem;color:#2a3a5a;">上传试卷后 AI 将自动生成知识图谱</div>
+        <button class="upload-hint-btn" onclick="openUpload()">📤 立即上传</button>
+      </div>
+    </div>
+    <div id="kp-grid"></div>
+    <div id="detail-panel">
+      <button id="detail-close" onclick="closeDetail()">← 返回</button>
+      <div id="detail-ph">
+        <div class="ph-icon">◈</div>
+        <div>← 点击节点查看详情</div>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <div class="report-toggle" onclick="toggleReport()" id="report-toggle">
+    <span id="report-arrow">▲</span> 全局分析报告
+  </div>
+  <div id="report-area">
+    <div class="report-inner" id="report-inner">
+      <div style="color:var(--text-dim);font-size:.82rem;text-align:center;padding:16px;">加载中…</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modal-overlay" onclick="closeUploadOutside(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeUpload()">✕</button>
+    <button class="modal-minimize" id="modal-minimize-btn" onclick="minimizeUpload()" style="display:none;">⤵ 最小化到后台</button>
+    <div class="modal-title">📤 上传试卷 / 错题本</div>
+    <div class="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="dz-icon">📁</div>
+      <div class="dz-text">拍照上传 或 点击选择文件</div>
+      <div class="dz-hint">支持 JPG、PNG 照片，可多选</div>
+    </div>
+    <input type="file" id="file-input" accept="image/*" multiple style="display:none" onchange="handleFile(this)"/>
+    <div id="upload-status"></div>
+    <div class="upload-progress" id="upload-progress"><div class="upload-prog-fill" id="upload-prog-fill"></div></div>
+  </div>
+</div>
+
+<!-- 上传最小化浮窗 -->
+<div id="upload-pill" onclick="expandUpload()">
+  <div class="pill-header">
+    <div class="pill-dots"><div class="pill-dot"></div><div class="pill-dot"></div><div class="pill-dot"></div></div>
+    <span id="pill-text">⚡ 上传中 0/0</span>
+  </div>
+  <div class="pill-bar-track"><div class="pill-bar-fill" id="pill-bar-fill"></div></div>
+  <div class="pill-hint">点击展开详情</div>
+</div>
+
+<script src="api.js"></script>
+<script>
+/* ── 全局状态 ── */
+let NODES = [];
+let EDGES = [];
+let activeFilters = { subject: '全部', mastery: '全部' };
+let selectedNode  = null;
+let animT = 0;
+let NODE_R = 40;   // 随画布/节点数自适应,见 resizeGraph
+
+/* ── 筛选 ── */
+document.querySelectorAll('.chip[data-group]').forEach(chip => {
+  chip.addEventListener('click', function() {
+    const g = this.dataset.group, v = this.dataset.val;
+    document.querySelectorAll(`.chip[data-group="${g}"]`).forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    activeFilters[g] = v;
+    renderKpGrid();   // 同步刷新手机卡片列表
+  });
+});
+function masteryCategory(m) {
+  if (m < 0.60) return '薄弱'; if (m < 0.76) return '中等'; return '掌握';
+}
+
+/* ── 知识点卡片列表(手机视图) ── */
+function passesFilter(n) {
+  const sOk = activeFilters.subject === '全部' || n.subject === activeFilters.subject;
+  const mOk = activeFilters.mastery === '全部' || masteryCategory(n.mastery) === activeFilters.mastery;
+  return sOk && mOk;
+}
+function openDetailByLabel(label) { const n = NODES.find(x => x.label === label); if (n) openDetail(n); }
+function closeDetail() { const dp = document.getElementById('detail-panel'); if (dp) dp.classList.remove('open'); }
+function renderKpGrid() {
+  const box = document.getElementById('kp-grid');
+  if (!box) return;
+  const items = NODES.filter(passesFilter).slice().sort((a, b) => a.mastery - b.mastery);
+  if (!items.length) {
+    box.innerHTML = '<div id="kp-grid-empty">暂无知识点。<br>上传试卷后 AI 会自动分析生成。<br><br>' +
+      '<button class="upload-hint-btn" onclick="openUpload()">📤 立即上传</button></div>';
+    return;
+  }
+  box.innerHTML = items.map(n => {
+    const col = colCSS(n.mastery), pct = Math.round(n.mastery * 100);
+    const lab = esc(n.label).replace(/'/g, "\\'");
+    return `<div class="kp-card" onclick="openDetailByLabel('${lab}')">
+      <span class="kp-dot" style="background:${col};box-shadow:0 0 8px ${col}"></span>
+      <div class="kp-main">
+        <div class="kp-name">${esc(n.label)}</div>
+        <div class="kp-sub">${esc(n.subject || '')} · ${masteryCategory(n.mastery)}</div>
+        <div class="kp-bar"><i style="width:${pct}%;background:${col}"></i></div>
+      </div>
+      <div class="kp-pct" style="color:${col}">${pct}%</div>
+      <div class="kp-go">›</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Canvas 图谱 ── */
+const graphCanvas = document.getElementById('graphCanvas');
+const gctx = graphCanvas.getContext('2d');
+const graphArea  = document.getElementById('graph-area');
+
+function nodeColor(m) {
+  if (m < 0.60) return { core:'#ff2d78', glow:'rgba(255,45,120,' };
+  if (m < 0.76) return { core:'#f59e0b', glow:'rgba(245,158,11,' };
+  return { core:'#2de2e6', glow:'rgba(45,226,230,' };
+}
+function resizeGraph() {
+  // 画布做成正方形(避免宽高比挤压),并按节点数放大到能铺开;窄屏时大于可视区→可滚动
+  const aw = graphArea.clientWidth, ah = graphArea.clientHeight;
+  const n = Math.max(NODES.length, 1);
+  const need = Math.ceil(Math.sqrt(n)) * 150;          // 每个节点留够空间
+  const side = Math.max(aw, ah, need);
+  graphCanvas.width = side; graphCanvas.height = side;
+  graphCanvas.style.width = side + 'px';
+  graphCanvas.style.height = side + 'px';
+  NODE_R = Math.max(24, Math.min(40, side / (Math.sqrt(n) * 3.2)));  // 节点尺寸自适应
+}
+// 画布是正方形,x/y 同尺度,不再挤压
+function nodeScreenPos(n) { return { x: n.x * graphCanvas.width, y: n.y * graphCanvas.height }; }
+function splitLabel(str, max) {
+  if (str.length <= max) return [str];
+  const mid = Math.ceil(str.length / 2); return [str.slice(0, mid), str.slice(mid)];
+}
+
+function drawGraph(t) {
+  if (!NODES.length) return;
+  const W = graphCanvas.width, H = graphCanvas.height;
+  gctx.clearRect(0, 0, W, H);
+
+  NODES.forEach(n => {
+    const sOk = activeFilters.subject === '全部' || n.subject === activeFilters.subject;
+    const mOk = activeFilters.mastery === '全部' || masteryCategory(n.mastery) === activeFilters.mastery;
+    n.hidden = !(sOk && mOk);
+  });
+
+  EDGES.forEach(([a, b]) => {
+    const na = NODES[a], nb = NODES[b];
+    if (!na || !nb || na.hidden || nb.hidden) return;
+    const pa = nodeScreenPos(na), pb = nodeScreenPos(nb);
+    gctx.save();
+    const g = gctx.createLinearGradient(pa.x, pa.y, pb.x, pb.y);
+    g.addColorStop(0,'rgba(45,226,230,0.20)'); g.addColorStop(0.5,'rgba(168,85,247,0.14)'); g.addColorStop(1,'rgba(45,226,230,0.20)');
+    gctx.beginPath(); gctx.moveTo(pa.x, pa.y); gctx.lineTo(pb.x, pb.y);
+    gctx.strokeStyle=g; gctx.lineWidth=1.5; gctx.setLineDash([6,6]);
+    gctx.lineDashOffset=-(t*20)%24; gctx.stroke(); gctx.restore();
+  });
+
+  NODES.forEach(node => {
+    if (node.hidden) return;
+    const pos=nodeScreenPos(node), col=nodeColor(node.mastery);
+    const isSel = selectedNode && selectedNode.id === node.id;
+    const pulse = 0.5 + 0.5*Math.sin(t*1.6+node.id*0.7);
+    gctx.save();
+    const glowR = NODE_R+16+(isSel?14:pulse*7);
+    const rg = gctx.createRadialGradient(pos.x,pos.y,NODE_R*0.4,pos.x,pos.y,glowR);
+    rg.addColorStop(0,col.glow+(isSel?0.65:0.22+pulse*0.15)+')');
+    rg.addColorStop(1,col.glow+'0)');
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,glowR,0,Math.PI*2); gctx.fillStyle=rg; gctx.fill();
+    const rf = gctx.createRadialGradient(pos.x-NODE_R*0.3,pos.y-NODE_R*0.3,4,pos.x,pos.y,NODE_R);
+    rf.addColorStop(0,col.glow+'0.30)'); rf.addColorStop(1,'rgba(10,14,26,0.90)');
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,NODE_R,0,Math.PI*2); gctx.fillStyle=rf; gctx.fill();
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,NODE_R,0,Math.PI*2);
+    gctx.strokeStyle=isSel?col.core:col.glow+(0.5+pulse*0.3)+')'; gctx.lineWidth=isSel?2.5:1.5;
+    if(isSel){gctx.shadowBlur=20;gctx.shadowColor=col.core;}
+    gctx.stroke(); gctx.shadowBlur=0;
+    gctx.beginPath(); gctx.arc(pos.x,pos.y,NODE_R-5,-Math.PI/2,-Math.PI/2+node.mastery*2*Math.PI);
+    gctx.strokeStyle=col.core; gctx.lineWidth=2.5; gctx.setLineDash([]); gctx.stroke();
+    const lines=splitLabel(node.label,5);
+    gctx.font=`bold ${lines.length>1?10:11}px PingFang SC,Microsoft YaHei,sans-serif`;
+    gctx.textAlign='center'; gctx.textBaseline='middle'; gctx.fillStyle='#e0e8ff';
+    gctx.shadowBlur=8; gctx.shadowColor=col.core;
+    const lh=14, sy=pos.y-((lines.length-1)*lh)/2;
+    lines.forEach((l,i)=>gctx.fillText(l,pos.x,sy+i*lh));
+    gctx.shadowBlur=0;
+    gctx.font='9px monospace'; gctx.fillStyle=col.glow+'0.88)';
+    gctx.shadowBlur=4; gctx.shadowColor=col.core;
+    gctx.fillText(Math.round(node.mastery*100)+'%',pos.x,pos.y+NODE_R+10);
+    gctx.shadowBlur=0; gctx.restore();
+  });
+}
+
+graphCanvas.addEventListener('click', function(e) {
+  const rect=graphCanvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  let hit=null;
+  for(const n of NODES){ if(n.hidden)continue; const p=nodeScreenPos(n),dx=mx-p.x,dy=my-p.y; if(dx*dx+dy*dy<=NODE_R*NODE_R){hit=n;break;} }
+  selectedNode=hit; if(hit) openDetail(hit);
+});
+graphCanvas.addEventListener('mousemove', function(e) {
+  const rect=graphCanvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  let over=false;
+  for(const n of NODES){ if(n.hidden)continue; const p=nodeScreenPos(n),dx=mx-p.x,dy=my-p.y; if(dx*dx+dy*dy<=NODE_R*NODE_R){over=true;break;} }
+  graphCanvas.style.cursor=over?'pointer':'default';
+});
+
+function loop(ts){ animT=ts/1000; drawGraph(animT); requestAnimationFrame(loop); }
+window.addEventListener('resize', () => { resizeGraph(); });
+resizeGraph(); requestAnimationFrame(loop);
+
+/* ── 详情面板 ── */
+const detailPanel   = document.getElementById('detail-panel');
+const detailPH      = document.getElementById('detail-ph');
+const detailContent = document.getElementById('detail-content');
+
+function colCSS(m){ return m<0.60?'#ff2d78':m<0.76?'#f59e0b':'#2de2e6'; }
+function mlabel(m){ return m<0.60?'薄弱':m<0.76?'中等':'掌握'; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function openDetail(node) {
+  const col = colCSS(node.mastery), pct = Math.round(node.mastery*100);
+  detailContent.innerHTML = `
+    <div class="det-title" style="color:${col};text-shadow:0 0 10px ${col}">${esc(node.label)}</div>
+    <div class="det-subj">${esc(node.subject||'')}</div>
+    <div class="mastery-row">
+      <div class="mastery-track"><div class="mastery-fill" style="width:${pct}%;background:${col};box-shadow:0 0 6px ${col}"></div></div>
+      <div class="mastery-pct" style="color:${col}">${pct}%</div>
+      <div style="font-size:.7rem;color:${col}">${mlabel(node.mastery)}</div>
+    </div>
+    <div class="det-loading"><div class="spin"></div><br>加载详情…</div>`;
+  detailPH.style.display='none';
+  detailContent.classList.add('visible');
+  detailPanel.classList.add('open');
+
+  try {
+    const data = await api(`/knowledge/detail?name=${encodeURIComponent(node.label)}&subject=${encodeURIComponent(node.subject||'')}`);
+    const qHTML = (data.questions||[]).slice(0,4).map(q=>`<div class="q-item">● ${esc(q.stem||q)}</div>`).join('') || '<div style="color:var(--text-dim);font-size:.78rem;">暂无记录</div>';
+    const wHTML = (data.wrong_questions||[]).slice(0,3).map(w=>`<div class="wrong-item">
+      <div class="wrong-q">Q：${esc(w.stem||'')}</div>
+      <div class="wrong-ans">你的答案：${esc(w.child_answer||'')} ✗</div>
+      <div class="right-ans">正确答案：${esc(w.correct_answer||'')}</div>
+    </div>`).join('') || '<div style="color:var(--text-dim);font-size:.78rem;">暂无错题记录，继续保持！</div>';
+
+    detailContent.innerHTML = `
+      <div class="det-title" style="color:${col};text-shadow:0 0 10px ${col}">${esc(node.label)}</div>
+      <div class="det-subj">${esc(node.subject||'')}</div>
+      <div class="mastery-row">
+        <div class="mastery-track"><div class="mastery-fill" style="width:${pct}%;background:${col};box-shadow:0 0 6px ${col}"></div></div>
+        <div class="mastery-pct" style="color:${col}">${pct}%</div>
+        <div style="font-size:.7rem;color:${col}">${mlabel(node.mastery)}</div>
+      </div>
+      <div class="det-section"><div class="det-sec-title">📖 知识点详解</div><div class="det-text">${esc(data.intro||'').replace(/\n/g,'<br>')}</div></div>
+      <div class="det-section"><div class="det-sec-title">📝 出过的题目</div>${qHTML}</div>
+      <div class="det-section"><div class="det-sec-title">❌ 做错过的题目</div>${wHTML}</div>
+      <div class="det-section"><div class="det-sec-title">🤖 AI 辅导</div>
+        <button class="ai-btn" onclick="askAI('${esc(node.label)}')">🤖 找 AI 老师讨论这个知识点</button>
+      </div>`;
+  } catch (e) {
+    // 降级显示基本信息
+    detailContent.innerHTML = `
+      <div class="det-title" style="color:${col};text-shadow:0 0 10px ${col}">${esc(node.label)}</div>
+      <div class="det-subj">${esc(node.subject||'')}</div>
+      <div class="mastery-row">
+        <div class="mastery-track"><div class="mastery-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="mastery-pct" style="color:${col}">${pct}%</div>
+        <div style="font-size:.7rem;color:${col}">${mlabel(node.mastery)}</div>
+      </div>
+      <div style="color:var(--text-dim);font-size:.8rem;margin-top:12px;">详情加载失败，请检查网络</div>
+      <div class="det-section" style="margin-top:16px;"><div class="det-sec-title">🤖 AI 辅导</div>
+        <button class="ai-btn" onclick="askAI('${esc(node.label)}')">🤖 找 AI 老师讨论这个知识点</button>
+      </div>`;
+  }
+}
+
+function askAI(topic) { window.location = 'teacher.html?topic=' + encodeURIComponent(topic); }
+detailPanel.addEventListener('transitionend', () => resizeGraph());
+
+/* ── 报告区 ── */
+let reportOpen = false;
+function toggleReport() {
+  reportOpen = !reportOpen;
+  document.getElementById('report-area').classList.toggle('open', reportOpen);
+  document.getElementById('report-arrow').textContent = reportOpen ? '▼' : '▲';
+}
+
+function renderReport(dashboard) {
+  const el = document.getElementById('report-inner');
+  if (!dashboard) { el.innerHTML = '<div style="color:var(--text-dim);font-size:.82rem;text-align:center;padding:16px;">暂无分析数据，请先上传试卷</div>'; return; }
+  const totalQ = dashboard.counts && dashboard.counts.questions != null ? dashboard.counts.questions : '—';
+  const weakN  = dashboard.counts && dashboard.counts.weak != null ? dashboard.counts.weak : (dashboard.weak_points||[]).length;
+  const mastery = Math.round((dashboard.overall_mastery||0)*100);
+  const weakChips = (dashboard.weak_points||[]).slice(0,8).map(wp =>
+    `<span class="weak-chip">${esc(wp.knowledge_point||'')} ${Math.round((wp.mastery||0)*100)}%</span>`).join('');
+  el.innerHTML = `
+    <div class="report-grid">
+      <div class="rep-card"><div class="rep-val">${totalQ}</div><div class="rep-lbl">已分析题目</div></div>
+      <div class="rep-card"><div class="rep-val" style="background:linear-gradient(135deg,#ff2d78,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${weakN}</div><div class="rep-lbl">薄弱知识点</div></div>
+      <div class="rep-card"><div class="rep-val">${mastery}%</div><div class="rep-lbl">综合掌握度</div></div>
+      <div class="rep-card"><div class="rep-val" style="background:linear-gradient(135deg,#f59e0b,#10b981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${(dashboard.streak_days||0)}天</div><div class="rep-lbl">连续学习</div></div>
+    </div>
+    <div class="rep-weak">
+      <div class="rep-weak-title">⚠ AI 总结薄弱点</div>
+      <div class="weak-chips">${weakChips || '<span style="color:var(--text-dim);font-size:.78rem;">暂无薄弱点</span>'}</div>
+    </div>`;
+}
+
+/* ── 加载知识图谱数据 ── */
+async function loadKnowledge() {
+  try {
+    const [kData, dashboard] = await Promise.allSettled([
+      api('/knowledge'),
+      api('/dashboard'),
+    ]);
+
+    renderReport(dashboard.status === 'fulfilled' ? dashboard.value : null);
+
+    if (kData.status !== 'fulfilled' || !kData.value) {
+      document.getElementById('graph-empty').classList.add('visible');
+      return;
+    }
+
+    const knowledge = kData.value;
+    const kps = knowledge.knowledge_points || [];
+
+    if (kps.length === 0) {
+      document.getElementById('graph-empty').classList.add('visible');
+      return;
+    }
+
+    // 隐藏空状态
+    document.getElementById('graph-empty').style.display = 'none';
+
+    // 布局:向日葵螺旋(phyllotaxis),把任意数量节点在圆盘内均匀铺开,不重叠不结团
+    const total = kps.length;
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    NODES = kps.map((kp, i) => {
+      const rr = Math.sqrt((i + 0.5) / total) * 0.46;   // 0~0.46 半径,均匀填盘
+      const a  = i * golden;
+      return {
+        id:      i,
+        label:   kp.name,
+        subject: kp.subject,
+        mastery: kp.mastery != null ? kp.mastery : 0.5,
+        x: 0.5 + rr * Math.cos(a),
+        y: 0.5 + rr * Math.sin(a),
+        hidden: false,
+      };
+    });
+
+    // 关系 → 边索引
+    const nameToIdx = {};
+    NODES.forEach((n, i) => { nameToIdx[n.label] = i; });
+    EDGES = (knowledge.relations || []).reduce((acc, rel) => {
+      const a = nameToIdx[rel.from], b = nameToIdx[rel.to];
+      if (a != null && b != null) acc.push([a, b]);
+      return acc;
+    }, []);
+
+    resizeGraph();   // 节点数确定后重算画布尺寸(按数量放大,窄屏可滚动)
+    // 画布比可视区大时,默认滚到中心(节点最密处),避免看着像偏左/右半空
+    graphArea.scrollLeft = Math.max(0, (graphCanvas.width  - graphArea.clientWidth)  / 2);
+    graphArea.scrollTop  = Math.max(0, (graphCanvas.height - graphArea.clientHeight) / 2);
+    renderKpGrid();   // 渲染手机卡片列表
+
+  } catch (e) {
+    console.error('知识图谱加载失败', e);
+    document.getElementById('graph-empty').classList.add('visible');
+  }
+}
+
+/* ── 上传进度全局状态 ── */
+const uploadState = {
+  active:   false,   // 是否正在上传
+  done:     false,   // 上传阶段是否完成
+  current:  0,
+  total:    0,
+  ok:       0,
+  pct:      0,       // 0–100
+  statusHTML: '',
+};
+
+function syncUploadUI() {
+  const statusEl = document.getElementById('upload-status');
+  const fill     = document.getElementById('upload-prog-fill');
+  const pillText = document.getElementById('pill-text');
+  const pillFill = document.getElementById('pill-bar-fill');
+  if (statusEl) statusEl.innerHTML = uploadState.statusHTML;
+  if (fill)     fill.style.width   = uploadState.pct + '%';
+  if (pillText) pillText.textContent = uploadState.done
+    ? (uploadState.analyzing ? '⏳ 分析中…' : '✓ 上传完成，分析中…')
+    : `⚡ 上传中 ${uploadState.current}/${uploadState.total}`;
+  if (pillFill) pillFill.style.width = uploadState.pct + '%';
+}
+
+/* ── 上传 ── */
+function openUpload() {
+  document.getElementById('modal-overlay').classList.add('open');
+  // 若正在上传，立即同步状态到 modal
+  if (uploadState.active) syncUploadUI();
+}
+function closeUpload() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  // 若不在上传则清空状态
+  if (!uploadState.active) {
+    document.getElementById('upload-status').textContent = '';
+    document.getElementById('upload-progress').classList.remove('visible');
+    document.getElementById('upload-prog-fill').style.width = '0%';
+  }
+}
+function closeUploadOutside(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeUpload();
+}
+function closeBanner() { document.getElementById('upload-banner').classList.remove('visible'); }
+
+function minimizeUpload() {
+  // 收起 modal，显示浮窗
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('upload-pill').classList.add('visible');
+  syncUploadUI();
+}
+
+function expandUpload() {
+  // 点浮窗重新展开 modal
+  document.getElementById('upload-pill').classList.remove('visible');
+  document.getElementById('modal-overlay').classList.add('open');
+  syncUploadUI();
+}
+
+// 前端压缩:手机照片几 MB → 长边 1600px 几百 KB,避免 nginx 413
+function compressImage(file, maxEdge = 1600, q = 0.82) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (Math.max(w, h) > maxEdge) { const s = maxEdge / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => resolve(b || file), 'image/jpeg', q);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+async function handleFile(input) {
+  if (!input.files || !input.files.length) return;
+  const files = Array.from(input.files);
+  const progress = document.getElementById('upload-progress');
+  progress.classList.add('visible');
+
+  // 显示"最小化"按钮
+  document.getElementById('modal-minimize-btn').style.display = '';
+
+  // 初始化全局状态
+  uploadState.active   = true;
+  uploadState.done     = false;
+  uploadState.analyzing = false;
+  uploadState.current  = 0;
+  uploadState.total    = files.length;
+  uploadState.ok       = 0;
+  uploadState.pct      = 0;
+
+  // 逐张压缩 + 顺序上传
+  for (let i = 0; i < files.length; i++) {
+    uploadState.current  = i;
+    uploadState.pct      = Math.round(i / files.length * 100);
+    uploadState.statusHTML = `<span style="color:var(--cyan)">⚡ 压缩并上传中… ${i}/${files.length}（成功 ${uploadState.ok}）</span>`;
+    syncUploadUI();
+    try {
+      const blob = await compressImage(files[i]);
+      const fd = new FormData();
+      fd.append('files', blob, (files[i].name || 'img') + '.jpg');
+      await apiForm('/upload', fd);
+      uploadState.ok++;
+    } catch (e) { /* 单张失败，继续 */ }
+  }
+
+  // 上传完成
+  uploadState.current   = files.length;
+  uploadState.pct       = 100;
+  uploadState.done      = true;
+  uploadState.analyzing = true;
+  uploadState.statusHTML = `<span style="color:#4ade80">✓ 上传成功 ${uploadState.ok}/${files.length}！正在后台分析…</span>`;
+  syncUploadUI();
+
+  // 如果 modal 还打开就关掉；pill 若未显示则显示
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('upload-banner').classList.add('visible');
+  if (!document.getElementById('upload-pill').classList.contains('visible')) {
+    // 不强制显示浮窗，上传已完成，banner 就够了
+  }
+
+  // 轮询分析状态
+  let stopPoll = pollAnalysisStatus((status) => {
+    if (!status.running) {
+      uploadState.analyzing = false;
+      uploadState.active    = false;
+      document.getElementById('banner-text').textContent = '✓ 分析完成！知识图谱已更新';
+      // 浮窗展示完成状态后自动消失
+      document.getElementById('pill-text').textContent = '✓ 上传完成，分析中…';
+      setTimeout(() => {
+        document.getElementById('upload-pill').classList.remove('visible');
+        document.getElementById('modal-minimize-btn').style.display = 'none';
+        closeBanner();
+        loadKnowledge();
+      }, 2500);
+      stopPoll();
+    }
+  }, 3000);
+
+  input.value = '';
+  uploadState.active = false; // 上传循环本身已结束（分析还在跑）
+}
+
+/* 拖放 */
+(function() {
+  const dz = document.querySelector('.drop-zone');
+  if (!dz) return;
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor='var(--magenta)'; });
+  dz.addEventListener('dragleave', () => { dz.style.borderColor=''; });
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.style.borderColor='';
+    const fi = document.getElementById('file-input');
+    if (e.dataTransfer.files.length) {
+      // 把拖入文件设给 input，再触发 handleFile
+      const dt = new DataTransfer();
+      Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+      fi.files = dt.files;
+      handleFile(fi);
+    }
+  });
+})();
+
+loadKnowledge();
+</script>
+<script src="bg.js"></script>
+</body>
+</html>

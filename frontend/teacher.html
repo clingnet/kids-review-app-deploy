@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI 老师 — 期末复习指挥舱</title>
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --bg:#0a0e1a; --cyan:#2de2e6; --purple:#a855f7; --magenta:#ff2d78;
+    --glass-bg:rgba(10,20,50,.58); --glass-border:rgba(45,226,230,.22);
+    --text:#c8e6f8; --text-dim:#5a7fa0; --radius:16px;
+  }
+  html,body { height:100%; background:var(--bg); color:var(--text);
+    font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; overflow:hidden; }
+  body::before { content:''; position:fixed; inset:0; z-index:1000; pointer-events:none;
+    background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,.07) 3px,rgba(0,0,0,.07) 4px);
+    animation:scanMove 6s linear infinite; opacity:.4; }
+  @keyframes scanMove { from{background-position:0 0;} to{background-position:0 80px;} }
+  #app { position:relative; z-index:2; height:100vh; height:100dvh; display:flex; flex-direction:column; }
+  nav { display:flex; align-items:center; justify-content:space-between; padding:12px 28px;
+    padding-top:max(12px, env(safe-area-inset-top));
+    background:rgba(10,14,26,.90); backdrop-filter:blur(16px); border-bottom:1px solid var(--glass-border); flex-shrink:0; z-index:100; }
+  .nav-brand { font-size:1.1rem; font-weight:700; letter-spacing:.08em;
+    background:linear-gradient(90deg,var(--cyan),var(--purple),var(--magenta));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    filter:drop-shadow(0 0 6px rgba(45,226,230,.5)); }
+  .nav-links { display:flex; gap:5px; }
+  .nav-links a { color:var(--text-dim); text-decoration:none; padding:5px 16px; border-radius:20px; font-size:.84rem; border:1px solid transparent; transition:all .25s; }
+  .nav-links a:hover,.nav-links a.active { color:var(--cyan); border-color:var(--cyan); background:rgba(45,226,230,.08); box-shadow:0 0 10px rgba(45,226,230,.25); }
+  .nav-right { display:flex; align-items:center; gap:10px; font-size:.78rem; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--cyan); animation:dotPulse 2s ease-in-out infinite; box-shadow:0 0 8px var(--cyan); }
+  @keyframes dotPulse { 0%,100%{opacity:.4;transform:scale(.8);} 50%{opacity:1;transform:scale(1.2);} }
+  .status-lbl { color:var(--text-dim); }
+  .status-lbl span { color:var(--cyan); }
+  .sub-tabs { display:flex; flex-shrink:0; background:rgba(10,14,26,.75); backdrop-filter:blur(12px); border-bottom:1px solid var(--glass-border); }
+  .sub-tab { padding:12px 28px; font-size:.88rem; cursor:pointer; font-family:inherit; background:transparent; border:none; color:var(--text-dim); border-bottom:2px solid transparent; transition:all .2s; letter-spacing:.04em; }
+  .sub-tab:hover { color:var(--text); }
+  .sub-tab.active { color:var(--cyan); border-bottom-color:var(--cyan); background:rgba(45,226,230,.05); }
+  #tab-content { flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  /* TAB A */
+  #tab-qa { display:flex; flex-direction:column; height:100%; }
+  #ctx-bar { flex-shrink:0; padding:8px 24px; background:rgba(168,85,247,.07); border-bottom:1px solid rgba(168,85,247,.2); display:flex; align-items:center; gap:12px; font-size:.8rem; }
+  #ctx-bar.hidden { display:none; }
+  .ctx-tag { padding:3px 10px; border-radius:10px; font-size:.75rem; border:1px solid rgba(168,85,247,.4); color:var(--purple); background:rgba(168,85,247,.1); }
+  .ctx-close { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:.85rem; transition:color .2s; }
+  .ctx-close:hover { color:var(--magenta); }
+  #chat-area { flex:1; overflow-y:auto; padding:22px 0; display:flex; flex-direction:column; gap:16px; scroll-behavior:smooth; }
+  #chat-area::-webkit-scrollbar { width:3px; }
+  #chat-area::-webkit-scrollbar-thumb { background:rgba(45,226,230,.18); border-radius:2px; }
+  .msg-row { display:flex; gap:11px; padding:0 24px; animation:msgIn .3s ease-out both; }
+  @keyframes msgIn { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+  .msg-row.teacher { align-items:flex-start; }
+  .msg-row.student { align-items:flex-end; flex-direction:row-reverse; }
+  .avatar { width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; }
+  .avatar.ai-av  { background:linear-gradient(135deg,var(--cyan),var(--purple)); box-shadow:0 0 12px rgba(45,226,230,.4); color:#0a0e1a; }
+  .avatar.stu-av { background:linear-gradient(135deg,var(--purple),var(--magenta)); box-shadow:0 0 12px rgba(168,85,247,.4); color:#fff; }
+  .msg-bd { display:flex; flex-direction:column; max-width:72%; min-width:0; }
+  .msg-row.student .msg-bd { align-items:flex-end; }
+  .bubble { width:fit-content; max-width:100%; padding:13px 17px; border-radius:14px; font-size:.88rem; line-height:1.7; position:relative; word-break:break-word; overflow-wrap:anywhere; white-space:normal; }
+  .bubble.t-bub { background:rgba(45,226,230,.06); border:1px solid rgba(45,226,230,.18); color:#d0eeff; border-top-left-radius:4px; box-shadow:0 0 14px rgba(45,226,230,.06); }
+  .bubble.s-bub { background:rgba(168,85,247,.1); border:1px solid rgba(168,85,247,.28); color:#e0d0ff; border-top-right-radius:4px; }
+  .bubble-meta { font-size:.68rem; color:var(--text-dim); margin-top:5px; display:flex; align-items:center; gap:5px; }
+  .thinking-bubble { display:flex; align-items:center; gap:5px; padding:11px 17px;
+    background:rgba(45,226,230,.05); border:1px solid rgba(45,226,230,.14); border-radius:14px; border-top-left-radius:4px; max-width:90px; }
+  .think-dot { width:7px; height:7px; border-radius:50%; background:var(--cyan); opacity:.3; animation:thinkBounce 1.2s ease-in-out infinite; }
+  .think-dot:nth-child(2){animation-delay:.2s;} .think-dot:nth-child(3){animation-delay:.4s;}
+  @keyframes thinkBounce { 0%,100%{opacity:.2;transform:translateY(0);} 50%{opacity:1;transform:translateY(-5px);} }
+  .tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:.7rem; margin:3px 3px 0 0; border:1px solid; }
+  .tag-cyan    { border-color:rgba(45,226,230,.4); color:var(--cyan); background:rgba(45,226,230,.07); }
+  .tag-purple  { border-color:rgba(168,85,247,.4); color:var(--purple); background:rgba(168,85,247,.07); }
+  .tag-magenta { border-color:rgba(255,45,120,.4); color:var(--magenta); background:rgba(255,45,120,.07); }
+  .chat-divider { text-align:center; font-size:.7rem; color:var(--text-dim); letter-spacing:.1em; display:flex; align-items:center; gap:10px; padding:0 24px; }
+  .chat-divider::before,.chat-divider::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,transparent,rgba(45,226,230,.14),transparent); }
+  /* 图片预览 */
+  .img-preview { max-width:180px; border-radius:8px; border:1px solid rgba(45,226,230,.25); margin-top:6px; display:block; }
+  /* 输入区 */
+  #input-bar { flex-shrink:0; padding:14px 22px calc(18px + env(safe-area-inset-bottom)); background:rgba(10,14,26,.93); backdrop-filter:blur(18px); border-top:1px solid rgba(45,226,230,.14); }
+  .input-row { display:flex; align-items:flex-end; gap:9px; }
+  .attach-btn { width:40px; height:40px; border-radius:11px; flex-shrink:0; border:1px solid var(--glass-border); background:rgba(45,226,230,.05); color:var(--text-dim); display:flex; align-items:center; justify-content:center; font-size:1rem; cursor:pointer; transition:all .2s; }
+  .attach-btn:hover { border-color:var(--cyan); color:var(--cyan); background:rgba(45,226,230,.1); box-shadow:0 0 8px rgba(45,226,230,.2); }
+  .input-wrap { flex:1; background:rgba(15,25,55,.7); border:1px solid rgba(45,226,230,.2); border-radius:13px; display:flex; align-items:flex-end; gap:8px; padding:9px 13px; transition:border-color .2s,box-shadow .2s; }
+  .input-wrap:focus-within { border-color:rgba(45,226,230,.5); box-shadow:0 0 14px rgba(45,226,230,.1); }
+  #chat-input { flex:1; background:none; border:none; outline:none; color:var(--text); font-size:.88rem; font-family:inherit; resize:none; max-height:110px; line-height:1.5; min-height:22px; caret-color:var(--cyan); }
+  #chat-input::placeholder { color:var(--text-dim); }
+  .send-btn { width:34px; height:34px; border-radius:9px; flex-shrink:0; background:linear-gradient(135deg,var(--cyan),var(--purple)); border:none; color:#0a0e1a; display:flex; align-items:center; justify-content:center; font-size:.95rem; cursor:pointer; box-shadow:0 0 10px rgba(45,226,230,.4); transition:transform .15s,box-shadow .15s; }
+  .send-btn:hover { transform:scale(1.1); box-shadow:0 0 18px rgba(45,226,230,.6); }
+  .send-btn:disabled { opacity:.5; cursor:default; transform:none; }
+  .quick-row { display:flex; gap:7px; margin-top:9px; flex-wrap:wrap; }
+  .quick-btn { padding:4px 13px; border-radius:20px; border:1px solid rgba(45,226,230,.18); background:rgba(45,226,230,.04); color:var(--text-dim); font-size:.76rem; cursor:pointer; transition:all .2s; font-family:inherit; }
+  .quick-btn:hover { border-color:rgba(45,226,230,.45); color:var(--cyan); background:rgba(45,226,230,.09); box-shadow:0 0 7px rgba(45,226,230,.18); }
+  /* TAB B */
+  #tab-exam { display:none; flex-direction:column; overflow-y:auto; flex:1; }
+  #tab-exam::-webkit-scrollbar { width:4px; }
+  #tab-exam::-webkit-scrollbar-thumb { background:rgba(45,226,230,.2); }
+  #tab-exam.active { display:flex; }
+  .exam-main { padding:24px 28px 48px; max-width:1060px; margin:0 auto; width:100%; }
+  .exam-page-title { text-align:center; margin-bottom:26px; }
+  .exam-page-title h1 { font-size:2rem; font-weight:900; letter-spacing:.06em;
+    background:linear-gradient(90deg,var(--cyan),var(--purple),var(--magenta));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    filter:drop-shadow(0 0 16px rgba(168,85,247,.5)); animation:titleGlow 3s ease-in-out infinite alternate; }
+  @keyframes titleGlow { 0%{filter:drop-shadow(0 0 12px rgba(45,226,230,.5));} 100%{filter:drop-shadow(0 0 24px rgba(168,85,247,.7));} }
+  .exam-page-sub { font-size:.82rem; color:var(--text-dim); letter-spacing:.1em; text-transform:uppercase; margin-top:5px; }
+  .source-panels { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:18px; }
+  @media(max-width:900px){ .source-panels{grid-template-columns:1fr;} }
+  .glass-card { background:var(--glass-bg); backdrop-filter:blur(20px); border:1px solid var(--glass-border); border-radius:var(--radius); overflow:hidden; }
+  .panel-cyan    { border-color:rgba(45,226,230,.3); } .panel-cyan:hover    { box-shadow:0 0 28px rgba(45,226,230,.18); border-color:rgba(45,226,230,.5); }
+  .panel-magenta { border-color:rgba(255,45,120,.3); } .panel-magenta:hover { box-shadow:0 0 28px rgba(255,45,120,.18); border-color:rgba(255,45,120,.5); }
+  .panel-purple  { border-color:rgba(168,85,247,.3); } .panel-purple:hover  { box-shadow:0 0 28px rgba(168,85,247,.18); border-color:rgba(168,85,247,.5); }
+  .panel-header { display:flex; align-items:center; justify-content:space-between; padding:.9rem 1.1rem; border-bottom:1px solid rgba(255,255,255,.06); }
+  .panel-title { font-size:.9rem; font-weight:700; letter-spacing:.04em; }
+  .panel-cyan .panel-title    { color:var(--cyan); text-shadow:0 0 8px rgba(45,226,230,.5); }
+  .panel-magenta .panel-title { color:var(--magenta); text-shadow:0 0 8px rgba(255,45,120,.5); }
+  .panel-purple .panel-title  { color:var(--purple); text-shadow:0 0 8px rgba(168,85,247,.5); }
+  .toggle-group { display:flex; align-items:center; gap:6px; font-size:.72rem; color:var(--text-dim); }
+  .toggle-switch { position:relative; width:44px; height:20px; cursor:pointer; }
+  .toggle-switch input { display:none; }
+  .toggle-track { position:absolute; inset:0; border-radius:999px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); transition:background .3s,box-shadow .3s; }
+  .toggle-thumb { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#94a3b8; transition:transform .3s cubic-bezier(.34,1.56,.64,1),background .3s,box-shadow .3s; }
+  .toggle-cyan input:checked~.toggle-track    { background:rgba(45,226,230,.2); border-color:rgba(45,226,230,.5); box-shadow:0 0 10px rgba(45,226,230,.4); }
+  .toggle-cyan input:checked~.toggle-thumb    { transform:translateX(24px); background:var(--cyan); box-shadow:0 0 7px var(--cyan); }
+  .toggle-magenta input:checked~.toggle-track { background:rgba(255,45,120,.2); border-color:rgba(255,45,120,.5); box-shadow:0 0 10px rgba(255,45,120,.4); }
+  .toggle-magenta input:checked~.toggle-thumb { transform:translateX(24px); background:var(--magenta); box-shadow:0 0 7px var(--magenta); }
+  .toggle-purple input:checked~.toggle-track  { background:rgba(168,85,247,.2); border-color:rgba(168,85,247,.5); box-shadow:0 0 10px rgba(168,85,247,.4); }
+  .toggle-purple input:checked~.toggle-thumb  { transform:translateX(24px); background:var(--purple); box-shadow:0 0 7px var(--purple); }
+  .panel-body { padding:1rem 1.1rem; min-height:140px; }
+  .auto-desc { color:#94a3b8; font-size:.82rem; line-height:1.6; margin-bottom:.8rem; }
+  .ai-indicator { display:inline-flex; align-items:center; gap:.45rem; padding:.3rem .75rem; border-radius:999px; font-size:.72rem; font-weight:700; letter-spacing:.07em; animation:pulseGlow 2s ease-in-out infinite; }
+  .ai-indicator-cyan    { background:rgba(45,226,230,.1);  border:1px solid rgba(45,226,230,.4);  color:var(--cyan); }
+  .ai-indicator-magenta { background:rgba(255,45,120,.1);  border:1px solid rgba(255,45,120,.4);  color:var(--magenta); }
+  .ai-indicator-purple  { background:rgba(168,85,247,.1);  border:1px solid rgba(168,85,247,.4);  color:var(--purple); }
+  @keyframes pulseGlow { 0%,100%{opacity:1;} 50%{opacity:.7;} }
+  .pulse-dot { width:7px; height:7px; border-radius:50%; animation:dotBlink 1.2s ease-in-out infinite; }
+  .dot-cyan{background:var(--cyan);} .dot-magenta{background:var(--magenta);} .dot-purple{background:var(--purple);}
+  @keyframes dotBlink { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(.6);} }
+  .chips-grid { display:flex; flex-wrap:wrap; gap:.45rem; }
+  .chip-item { display:inline-flex; align-items:center; gap:.3rem; padding:.28rem .7rem; border-radius:999px; font-size:.76rem; cursor:pointer; border:1px solid; transition:all .2s; user-select:none; font-family:inherit; }
+  .chip-item input[type="checkbox"]{ display:none; }
+  .chip-item-cyan { border-color:rgba(45,226,230,.25); color:rgba(45,226,230,.65); background:rgba(45,226,230,.05); }
+  .chip-item-cyan:hover { border-color:rgba(45,226,230,.5); color:var(--cyan); background:rgba(45,226,230,.1); }
+  .chip-item-cyan.selected { border-color:var(--cyan); color:var(--cyan); background:rgba(45,226,230,.18); box-shadow:0 0 12px rgba(45,226,230,.35); }
+  .chip-item-magenta { border-color:rgba(255,45,120,.25); color:rgba(255,45,120,.65); background:rgba(255,45,120,.05); }
+  .chip-item-magenta:hover { border-color:rgba(255,45,120,.5); color:var(--magenta); background:rgba(255,45,120,.1); }
+  .chip-item-magenta.selected { border-color:var(--magenta); color:var(--magenta); background:rgba(255,45,120,.18); box-shadow:0 0 12px rgba(255,45,120,.35); }
+  .mastery-badge { font-size:.66rem; opacity:.8; font-weight:600; }
+  .m-high{color:#4ade80;} .m-mid{color:#fbbf24;} .m-low{color:#f87171;}
+  .off-state { display:flex; align-items:center; justify-content:center; height:100%; min-height:110px; flex-direction:column; gap:.45rem; }
+  .off-icon { font-size:2rem; opacity:.3; } .off-text { color:var(--text-dim); font-size:.8rem; text-align:center; }
+  .config-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+  @media(max-width:900px){ .config-row{grid-template-columns:1fr 1fr;} }
+  .config-card { padding:1rem 1.1rem; }
+  .config-label { font-size:.72rem; color:var(--text-dim); letter-spacing:.08em; text-transform:uppercase; margin-bottom:.7rem; font-weight:600; }
+  .qty-display { font-size:1.9rem; font-weight:900; color:var(--cyan); text-shadow:0 0 14px rgba(45,226,230,.5); line-height:1; margin-bottom:.45rem; }
+  .qty-unit { font-size:.85rem; color:var(--text-dim); }
+  input[type="range"] { width:100%; -webkit-appearance:none; height:4px; background:rgba(255,255,255,.1); border-radius:2px; outline:none; margin-top:.2rem; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:15px; height:15px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); cursor:pointer; }
+  .type-options { display:flex; flex-direction:column; gap:.4rem; }
+  .type-option { display:flex; align-items:center; gap:.45rem; cursor:pointer; font-size:.81rem; color:#94a3b8; transition:color .2s; }
+  .type-option:hover { color:var(--text); }
+  .type-option input[type="checkbox"]{ display:none; }
+  .custom-check { width:15px; height:15px; border-radius:4px; border:1.5px solid rgba(168,85,247,.4); background:rgba(168,85,247,.05); position:relative; flex-shrink:0; transition:all .2s; }
+  .type-option input:checked+.custom-check { background:rgba(168,85,247,.28); border-color:var(--purple); box-shadow:0 0 7px rgba(168,85,247,.4); }
+  .type-option input:checked+.custom-check::after { content:'✓'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--purple); font-weight:900; }
+  .diff-toggle { display:flex; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,.1); }
+  .diff-btn { flex:1; padding:.42rem 0; background:transparent; border:none; color:var(--text-dim); font-size:.76rem; font-weight:600; cursor:pointer; transition:all .2s; font-family:inherit; }
+  .diff-btn:not(:last-child){ border-right:1px solid rgba(255,255,255,.1); }
+  .diff-btn.active-easy   { background:rgba(74,222,128,.15); color:#4ade80; }
+  .diff-btn.active-medium { background:rgba(251,191,36,.15); color:#fbbf24; }
+  .diff-btn.active-hard   { background:rgba(255,45,120,.15);  color:var(--magenta); }
+  .score-display { font-size:2.2rem; font-weight:900; background:linear-gradient(135deg,var(--cyan),var(--purple)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; filter:drop-shadow(0 0 8px rgba(168,85,247,.4)); line-height:1; }
+  .score-note { font-size:.72rem; color:var(--text-dim); margin-top:.35rem; }
+  .generate-wrap { text-align:center; margin-bottom:22px; }
+  .btn-generate { position:relative; display:inline-flex; align-items:center; gap:.65rem; padding:.9rem 2.6rem; font-size:1.1rem; font-weight:900; letter-spacing:.1em; color:#0a0e1a; background:linear-gradient(135deg,var(--cyan) 0%,var(--purple) 100%); border:none; border-radius:999px; cursor:pointer; font-family:inherit; box-shadow:0 0 22px rgba(45,226,230,.5),0 0 44px rgba(168,85,247,.3),0 4px 18px rgba(0,0,0,.4); animation:btnPulse 2.5s ease-in-out infinite; transition:transform .15s,box-shadow .15s; overflow:hidden; }
+  .btn-generate::before { content:''; position:absolute; inset:0; border-radius:inherit; background:linear-gradient(135deg,rgba(255,255,255,.22) 0%,transparent 60%); }
+  .btn-generate:hover { transform:translateY(-2px) scale(1.03); animation:none; box-shadow:0 0 34px rgba(45,226,230,.7),0 0 66px rgba(168,85,247,.5),0 8px 28px rgba(0,0,0,.5); }
+  .btn-generate:active { transform:scale(.97); }
+  @keyframes btnPulse { 0%,100%{box-shadow:0 0 22px rgba(45,226,230,.5),0 0 44px rgba(168,85,247,.3),0 4px 18px rgba(0,0,0,.4);} 50%{box-shadow:0 0 36px rgba(45,226,230,.8),0 0 72px rgba(168,85,247,.5),0 4px 18px rgba(0,0,0,.4);} }
+  .btn-generate.loading { animation:none; pointer-events:none; opacity:.8; }
+  .spinner-ring { display:none; width:20px; height:20px; border:2px solid rgba(10,14,26,.3); border-top-color:#0a0e1a; border-radius:50%; animation:spin .7s linear infinite; }
+  .btn-generate.loading .spinner-ring { display:block; }
+  .btn-generate.loading .btn-icon { display:none; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  /* 卷子 */
+  #exam-result { opacity:0; transform:translateY(28px); transition:opacity .5s,transform .5s; pointer-events:none; }
+  #exam-result.revealed { opacity:1; transform:translateY(0); pointer-events:auto; }
+  .result-label { text-align:center; margin-bottom:1.1rem; }
+  .result-label span { font-size:.72rem; letter-spacing:.14em; color:var(--cyan); text-transform:uppercase; padding:.28rem .9rem; border:1px solid rgba(45,226,230,.3); border-radius:999px; background:rgba(45,226,230,.05); }
+  .exam-paper { background:rgba(248,250,252,.96); backdrop-filter:blur(8px); border-radius:16px; padding:2.2rem 2.6rem; color:#1e293b; position:relative; overflow:hidden; box-shadow:0 0 36px rgba(45,226,230,.22),0 0 72px rgba(168,85,247,.1),0 8px 36px rgba(0,0,0,.4); }
+  .exam-title { text-align:center; border-bottom:2px solid #e2e8f0; padding-bottom:1.1rem; margin-bottom:1.3rem; }
+  .exam-title h2 { font-size:1.35rem; font-weight:900; color:#0f172a; letter-spacing:.1em; margin-bottom:.35rem; }
+  .exam-meta { display:flex; justify-content:center; gap:2rem; font-size:.8rem; color:#64748b; flex-wrap:wrap; }
+  .exam-section { margin-bottom:1.6rem; }
+  .esec-title { font-size:.95rem; font-weight:800; color:#1e293b; border-left:4px solid; padding-left:.65rem; margin-bottom:.9rem; letter-spacing:.04em; }
+  .question-item { margin-bottom:.9rem; }
+  .question-item p { font-size:.87rem; color:#374151; line-height:1.7; margin-bottom:.35rem; }
+  .question-num { font-weight:700; }
+  .q-options { display:grid; grid-template-columns:1fr 1fr; gap:.28rem .9rem; margin-top:.35rem; padding-left:.4rem; }
+  .q-options span { font-size:.84rem; color:#374151; }
+  .blank-line { display:inline-block; width:76px; border-bottom:1.5px solid #94a3b8; margin:0 .18rem; vertical-align:bottom; }
+  .calc-space { margin-top:.55rem; padding:.55rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; font-size:.8rem; color:#94a3b8; min-height:44px; }
+  .exam-actions { display:flex; gap:.9rem; justify-content:center; margin-top:1.5rem; padding-top:1.1rem; border-top:1px solid #e2e8f0; flex-wrap:wrap; }
+  .exam-btn { display:inline-flex; align-items:center; gap:.45rem; padding:.55rem 1.3rem; border-radius:8px; font-size:.87rem; font-weight:700; cursor:pointer; font-family:inherit; transition:all .2s; border:1.5px solid; }
+  .exam-btn-pdf   { background:rgba(37,99,235,.07); border-color:#2563eb; color:#2563eb; }
+  .exam-btn-pdf:hover   { background:rgba(37,99,235,.14); box-shadow:0 0 14px rgba(37,99,235,.3); }
+  .exam-btn-print { background:rgba(5,150,105,.07); border-color:#059669; color:#059669; }
+  .exam-btn-print:hover { background:rgba(5,150,105,.14); box-shadow:0 0 14px rgba(5,150,105,.3); }
+  .show-ans-btn { display:inline-flex; align-items:center; gap:.45rem; padding:.55rem 1.3rem; border-radius:8px; font-size:.87rem; font-weight:700; cursor:pointer; font-family:inherit; background:rgba(168,85,247,.1); border:1.5px solid rgba(168,85,247,.4); color:var(--purple); transition:all .2s; }
+  .show-ans-btn:hover { background:rgba(168,85,247,.2); box-shadow:0 0 14px rgba(168,85,247,.3); }
+  .answers-block { margin-top:1.2rem; padding:1rem 1.1rem; background:rgba(168,85,247,.06); border:1px solid rgba(168,85,247,.2); border-radius:10px; display:none; }
+  .answers-block.visible { display:block; animation:fadeIn .3s ease-out; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
+  .ans-row { font-size:.82rem; color:#c4b5fd; line-height:2; }
+  .hidden { display:none !important; }
+
+  /* 试卷编号徽章 */
+  .exam-code-badge { display:inline-block; font-family:'Courier New',Courier,monospace; font-size:1rem;
+    font-weight:900; letter-spacing:.12em; color:var(--cyan); text-shadow:0 0 10px rgba(45,226,230,.7);
+    border:1.5px solid rgba(45,226,230,.5); border-radius:6px; padding:.18rem .7rem;
+    background:rgba(45,226,230,.07); margin-top:.5rem; }
+  .source-badge { display:inline-flex; align-items:center; gap:.35rem; font-size:.72rem; font-weight:700;
+    padding:.22rem .7rem; border-radius:999px; margin-left:.6rem; vertical-align:middle; }
+  .source-badge-bank { background:rgba(45,226,230,.1); border:1px solid rgba(45,226,230,.4); color:var(--cyan); }
+  .source-badge-ai   { background:rgba(168,85,247,.1); border:1px solid rgba(168,85,247,.4); color:var(--purple); }
+
+  /* 判分区块 */
+  .grade-zone { margin-top:28px; padding:1.4rem 1.6rem; background:var(--glass-bg);
+    border:1px solid rgba(255,45,120,.28); border-radius:var(--radius);
+    backdrop-filter:blur(16px); }
+  .grade-zone-title { font-size:.95rem; font-weight:800; color:var(--magenta);
+    text-shadow:0 0 8px rgba(255,45,120,.5); letter-spacing:.05em; margin-bottom:1rem; }
+  .grade-upload-btn { display:inline-flex; align-items:center; gap:.6rem; padding:.75rem 1.8rem;
+    font-size:1rem; font-weight:800; letter-spacing:.06em; color:#fff;
+    background:linear-gradient(135deg,var(--magenta),var(--purple)); border:none; border-radius:999px;
+    cursor:pointer; font-family:inherit;
+    box-shadow:0 0 18px rgba(255,45,120,.4),0 0 36px rgba(168,85,247,.2),0 4px 14px rgba(0,0,0,.4);
+    transition:transform .15s,box-shadow .15s; }
+  .grade-upload-btn:hover { transform:translateY(-2px) scale(1.03);
+    box-shadow:0 0 28px rgba(255,45,120,.6),0 0 56px rgba(168,85,247,.4),0 6px 20px rgba(0,0,0,.5); }
+  .grade-upload-btn:active { transform:scale(.97); }
+  .grade-upload-btn:disabled { opacity:.55; cursor:default; transform:none; }
+  .grade-hint { font-size:.76rem; color:var(--text-dim); margin-top:.55rem; }
+  .grade-loading { display:none; align-items:center; gap:.75rem; padding:.8rem 1rem;
+    background:rgba(255,45,120,.06); border:1px solid rgba(255,45,120,.2); border-radius:10px;
+    margin-top:.9rem; }
+  .grade-loading.active { display:flex; }
+  .grade-spinner { width:20px; height:20px; border:2px solid rgba(255,45,120,.2);
+    border-top-color:var(--magenta); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+  .grade-loading-text { font-size:.83rem; color:var(--magenta); }
+  /* 判分结果卡 */
+  .grade-result-card { margin-top:1rem; background:rgba(10,16,36,.7); border:1px solid rgba(45,226,230,.25);
+    border-radius:12px; padding:1.2rem 1.4rem; display:none; }
+  .grade-result-card.visible { display:block; animation:fadeIn .35s ease-out; }
+  .grade-score-row { display:flex; align-items:baseline; gap:.6rem; margin-bottom:.5rem; flex-wrap:wrap; }
+  .grade-score-big { font-size:2.8rem; font-weight:900; line-height:1;
+    background:linear-gradient(135deg,var(--cyan),var(--purple));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    filter:drop-shadow(0 0 10px rgba(45,226,230,.5)); }
+  .grade-score-total { font-size:1.2rem; color:var(--text-dim); font-weight:700; }
+  .grade-stat-row { display:flex; gap:1.2rem; font-size:.82rem; margin-bottom:.75rem; flex-wrap:wrap; }
+  .grade-correct { color:#4ade80; font-weight:700; }
+  .grade-wrong   { color:var(--magenta); font-weight:700; }
+  .grade-meta { font-size:.76rem; color:var(--text-dim); margin-bottom:.9rem; }
+  .grade-detail-list { display:flex; flex-direction:column; gap:.35rem; max-height:320px;
+    overflow-y:auto; padding-right:4px; }
+  .grade-detail-list::-webkit-scrollbar { width:3px; }
+  .grade-detail-list::-webkit-scrollbar-thumb { background:rgba(45,226,230,.2); border-radius:2px; }
+  .grade-detail-item { display:flex; align-items:center; gap:.6rem; font-size:.82rem;
+    padding:.4rem .6rem; border-radius:7px; background:rgba(255,255,255,.03); }
+  .grade-detail-item.correct-item { border-left:3px solid #4ade80; }
+  .grade-detail-item.wrong-item   { border-left:3px solid var(--magenta); background:rgba(255,45,120,.05); }
+  .gdi-icon { font-size:1rem; flex-shrink:0; }
+  .gdi-num  { font-weight:700; color:var(--text); min-width:2.2rem; }
+  .gdi-ans  { color:var(--text-dim); flex:1; }
+  .gdi-ans-wrong { color:var(--magenta); }
+  .gdi-correct-ans { color:#4ade80; font-size:.77rem; }
+  .grade-footer-note { margin-top:.85rem; padding:.65rem .85rem; border-radius:8px;
+    background:rgba(255,45,120,.07); border:1px solid rgba(255,45,120,.2);
+    font-size:.78rem; color:#fca5a5; line-height:1.6; }
+  .grade-not-matched { padding:.9rem 1rem; border-radius:9px; font-size:.84rem;
+    background:rgba(255,45,120,.07); border:1px solid rgba(255,45,120,.3); color:#fca5a5; }
+  .grade-error { margin-top:.8rem; padding:.75rem 1rem; border-radius:9px; font-size:.83rem;
+    background:rgba(255,45,120,.07); border:1px solid rgba(255,45,120,.3); color:#fca5a5; display:none; }
+  .grade-error.visible { display:block; }
+
+  /* ── 打印样式 ── */
+  @media print {
+    /* 1. 修"只打最后一页"：解除所有裁剪容器的高度/溢出限制 */
+    html, body {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      background: #fff !important;
+      color: #000 !important;
+    }
+    #app, #tab-content, #tab-exam, .exam-main {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      display: block !important;
+      position: static !important;
+      flex: none !important;
+    }
+    /* 2. 只打印卷子：先把所有内容隐藏，再把 .exam-printable 显现 */
+    body * {
+      visibility: hidden !important;
+    }
+    .exam-printable,
+    .exam-printable * {
+      visibility: visible !important;
+    }
+    .exam-printable {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 2rem 2.6rem !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
+    /* 3. 明确隐藏不需要打印的区块(兜底) */
+    nav,
+    .sub-tabs,
+    .source-panels,
+    .config-row,
+    .generate-wrap,
+    .exam-actions,
+    .grade-zone,
+    .result-label,
+    #tab-qa,
+    #input-bar,
+    body::before {
+      display: none !important;
+    }
+    /* 4. 打印一律不带答案(无论屏幕上是否已显示) */
+    .answers-block {
+      display: none !important;
+    }
+    /* 5. 黑字白底：去掉深色背景、霓虹色、渐变文字 */
+    .exam-printable {
+      background: #fff !important;
+      color: #000 !important;
+    }
+    .exam-printable * {
+      color: #000 !important;
+      background: transparent !important;
+      -webkit-text-fill-color: #000 !important;
+      background-clip: unset !important;
+      -webkit-background-clip: unset !important;
+      text-shadow: none !important;
+      box-shadow: none !important;
+      filter: none !important;
+      border-color: #ccc !important;
+      animation: none !important;
+    }
+    /* 保留试卷结构线条样式 */
+    .exam-printable .exam-title {
+      border-bottom: 2px solid #000 !important;
+    }
+    .exam-printable .esec-title {
+      border-left: 4px solid #333 !important;
+      color: #000 !important;
+    }
+    .exam-printable .blank-line {
+      border-bottom: 1.5px solid #333 !important;
+    }
+    .exam-printable .calc-space {
+      border: 1px dashed #999 !important;
+      background: #f9f9f9 !important;
+      color: #666 !important;
+      -webkit-text-fill-color: #666 !important;
+    }
+    .exam-printable .q-options span {
+      color: #222 !important;
+      -webkit-text-fill-color: #222 !important;
+    }
+    /* 试卷编号徽章：保留可见(判分要用),改为黑白样式 */
+    .exam-code-badge {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      border: 1.5px solid #333 !important;
+      background: #f0f0f0 !important;
+    }
+    /* 6. 分页：不在题目中间截断，每道题/每节尽量完整 */
+    .exam-section {
+      page-break-inside: avoid;
+    }
+    .question-item {
+      page-break-inside: avoid;
+    }
+    .exam-title {
+      page-break-after: avoid;
+    }
+  }
+
+  /* ── 语音按钮录音态 ── */
+  #mic-btn.recording {
+    border-color: var(--magenta) !important;
+    background: rgba(255,45,120,.15) !important;
+    color: var(--magenta) !important;
+    box-shadow: 0 0 0 0 rgba(255,45,120,.6);
+    animation: micPulse 1s ease-out infinite;
+  }
+  @keyframes micPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(255,45,120,.6); }
+    70%  { box-shadow: 0 0 0 8px rgba(255,45,120,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,45,120,0); }
+  }
+  #mic-btn:disabled { opacity:.5; cursor:default; animation:none !important; }
+
+  /* ── 手机端(≤640px)专项适配 ── */
+  @media (max-width:640px) {
+    /* nav */
+    nav { padding:10px 12px; padding-top:max(10px, env(safe-area-inset-top)); flex-wrap:wrap; gap:6px; }
+    .nav-brand { font-size:1rem; }
+    .nav-links a { padding:4px 10px; font-size:.78rem; }
+    .nav-right { font-size:.72rem; }
+    /* sub-tabs */
+    .sub-tab { padding:10px 14px; font-size:.82rem; }
+    /* 聊天气泡 */
+    .msg-row { padding:0 10px; }
+    .msg-bd { max-width:86%; }
+    .bubble { padding:11px 13px; font-size:.84rem; }
+    .quick-row { gap:5px; }
+    .quick-btn { padding:4px 10px; font-size:.74rem; }
+    /* 输入区 */
+    #input-bar { padding:10px 12px calc(14px + env(safe-area-inset-bottom)); }
+    .attach-btn { width:36px; height:36px; font-size:.9rem; }
+    .send-btn { width:32px; height:32px; font-size:.85rem; }
+    /* 出模拟卷 tab */
+    .exam-main { padding:16px 12px calc(40px + env(safe-area-inset-bottom)); }
+    .source-panels { grid-template-columns:1fr !important; gap:10px; }
+    .config-row { grid-template-columns:1fr 1fr !important; gap:10px; }
+    .generate-wrap { margin-bottom:16px; }
+    .btn-generate { padding:.8rem 1.8rem; font-size:.95rem; }
+    /* 判分按钮触摸友好 */
+    .grade-upload-btn { min-height:48px; padding:.75rem 1.4rem; font-size:.9rem; }
+    /* 模拟卷试卷 */
+    .exam-paper { padding:1.4rem 1.2rem; }
+    .exam-actions { flex-direction:column; gap:.55rem; }
+    .exam-btn, .show-ans-btn { width:100%; justify-content:center; min-height:44px; }
+    /* chip横向滚动 */
+    .chips-grid { flex-wrap:wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <nav>
+    <div class="nav-brand">🤖 期末复习指挥舱</div>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="graph.html">知识图谱</a>
+      <a href="teacher.html" class="active">AI 老师</a>
+    </div>
+    <div class="nav-right">
+      <div class="status-dot"></div>
+      <div class="status-lbl">AI 老师在线</div>
+    </div>
+  </nav>
+
+  <div class="sub-tabs">
+    <button class="sub-tab active" id="tab-qa-btn"   onclick="switchTab('qa')">💬 问答辅导</button>
+    <button class="sub-tab"        id="tab-exam-btn" onclick="switchTab('exam')">📝 出模拟卷</button>
+    <button class="ctx-close" id="new-chat-btn" onclick="newChat()" style="margin-left:auto;font-size:.8rem;">🆕 新对话</button>
+  </div>
+
+  <div id="tab-content">
+
+    <!-- TAB A: 问答辅导 -->
+    <div id="tab-qa">
+      <div id="ctx-bar" class="hidden">
+        <span style="font-size:.78rem;color:var(--text-dim);">当前辅导知识点：</span>
+        <span class="ctx-tag" id="ctx-tag-label"></span>
+        <button class="ctx-close" onclick="clearCtx()">✕ 清除上下文</button>
+      </div>
+
+      <div id="chat-area">
+        <div class="chat-divider">今天 · AI 老师辅导开始</div>
+        <div class="msg-row teacher">
+          <div class="avatar ai-av">AI</div>
+          <div class="msg-bd">
+            <div class="bubble t-bub">
+              你好！我是你的 AI 老师 ⚡<br>
+              有任何不懂的题目、知识点都可以发给我，也可以拍照上传题目哦！<br>
+              <div style="margin-top:8px;">
+                <span class="tag tag-cyan">💡 支持文字提问</span>
+                <span class="tag tag-purple">📷 支持拍照上传</span>
+              </div>
+            </div>
+            <div class="bubble-meta">AI 老师 · 今天</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="input-bar">
+        <!-- 隐藏文件选择 -->
+        <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="onPhotoSelected(this)"/>
+        <div id="photo-preview-bar" style="display:none;padding:6px 0 2px;"></div>
+        <div class="input-row">
+          <button class="attach-btn" title="拍照上传题目" onclick="document.getElementById('photo-input').click()">📷</button>
+          <button class="attach-btn" id="mic-btn" title="语音输入" onclick="toggleVoice()">🎤</button>
+          <div class="input-wrap">
+            <textarea id="chat-input" rows="1" placeholder="输入问题，或把不会的题目发给 AI 老师…" oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendMsg()" title="发送">➤</button>
+          </div>
+        </div>
+        <div class="quick-row">
+          <button class="quick-btn" onclick="fillInput('再给我解释一遍，我没明白')">再解释一次</button>
+          <button class="quick-btn" onclick="fillInput('给我出一道类似的练习题')">再出一道练习</button>
+          <button class="quick-btn" onclick="fillInput('帮我总结今天学的知识点')">总结知识点</button>
+          <button class="quick-btn" onclick="fillInput('我想去看知识图谱')">查知识图谱</button>
+          <button class="quick-btn" onclick="switchTab(\'exam\')">出模拟卷</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB B: 出模拟卷 -->
+    <div id="tab-exam">
+      <div class="exam-main">
+
+        <div class="exam-page-title">
+          <h1>⚡ 智能模拟卷生成器</h1>
+          <p class="exam-page-sub">AI · 多源融合 · 精准命题 · 实时生成</p>
+        </div>
+
+        <div class="source-panels">
+          <!-- A: 知识图谱 -->
+          <div class="glass-card panel-cyan">
+            <div class="panel-header">
+              <div class="panel-title">🌐 基于知识图谱选考点</div>
+              <div class="toggle-group">
+                <span>自动</span>
+                <label class="toggle-switch toggle-cyan">
+                  <input type="checkbox" id="toggle-a" onchange="switchPanel('a',this.checked)">
+                  <div class="toggle-track"></div><div class="toggle-thumb"></div>
+                </label>
+                <span style="color:var(--cyan)">手动</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="auto-a">
+                <p class="auto-desc">系统根据知识图谱掌握度，智能抽取薄弱知识点，优先覆盖低掌握度节点。</p>
+                <div class="ai-indicator ai-indicator-cyan"><div class="pulse-dot dot-cyan"></div>AI 运算中</div>
+              </div>
+              <div class="hidden" id="manual-a">
+                <div class="chips-grid" id="kp-chips-a">
+                  <div style="color:var(--text-dim);font-size:.78rem;">加载知识点中…</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- B: 错题 -->
+          <div class="glass-card panel-magenta">
+            <div class="panel-header">
+              <div class="panel-title">❌ 基于错题选考点</div>
+              <div class="toggle-group">
+                <span>自动</span>
+                <label class="toggle-switch toggle-magenta">
+                  <input type="checkbox" id="toggle-b" onchange="switchPanel('b',this.checked)">
+                  <div class="toggle-track"></div><div class="toggle-thumb"></div>
+                </label>
+                <span style="color:var(--magenta)">手动</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="auto-b">
+                <p class="auto-desc">系统从错题库中智能筛选高频错误知识点，优先覆盖反复出错的题型。</p>
+                <div class="ai-indicator ai-indicator-magenta"><div class="pulse-dot dot-magenta"></div>AI 运算中</div>
+              </div>
+              <div class="hidden" id="manual-b">
+                <div class="chips-grid" id="kp-chips-b">
+                  <div style="color:var(--text-dim);font-size:.78rem;">加载薄弱点中…</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- C: AI 分析 -->
+          <div class="glass-card panel-purple">
+            <div class="panel-header">
+              <div class="panel-title">🤖 基于 AI 整体分析</div>
+              <div class="toggle-group">
+                <span style="color:var(--text-dim)">关</span>
+                <label class="toggle-switch toggle-purple">
+                  <input type="checkbox" id="toggle-c" checked onchange="switchPanelC(this.checked)">
+                  <div class="toggle-track"></div><div class="toggle-thumb"></div>
+                </label>
+                <span id="lbl-on-c" style="color:var(--purple)">开</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="panel-c-on">
+                <p class="auto-desc">AI 基于对学生整体学习情况的深度分析，智能补充针对性题目，构建全面评估。</p>
+                <div class="ai-indicator ai-indicator-purple" style="margin-bottom:.65rem;"><div class="pulse-dot dot-purple"></div>AI 深度分析中</div>
+              </div>
+              <div class="off-state hidden" id="panel-c-off">
+                <div class="off-icon">🤖</div>
+                <p class="off-text">AI 分析已关闭<br>将仅使用上方两个来源</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 配置行 -->
+        <div class="config-row">
+          <div class="glass-card config-card">
+            <div class="config-label">题目数量</div>
+            <div class="qty-display" id="qty-display">20<span class="qty-unit"> 题</span></div>
+            <input type="range" id="qty-range" min="5" max="50" value="20"
+              oninput="document.getElementById('qty-display').innerHTML=this.value+'<span class=qty-unit> 题</span>'">
+          </div>
+          <div class="glass-card config-card">
+            <div class="config-label">题型配置</div>
+            <div class="type-options">
+              <label class="type-option"><input type="checkbox" value="choice" checked onchange="updateScore()"><div class="custom-check"></div>选择题</label>
+              <label class="type-option"><input type="checkbox" value="fill" checked onchange="updateScore()"><div class="custom-check"></div>填空题</label>
+              <label class="type-option"><input type="checkbox" value="calc" checked onchange="updateScore()"><div class="custom-check"></div>计算题</label>
+              <label class="type-option"><input type="checkbox" value="essay" checked onchange="updateScore()"><div class="custom-check"></div>解答题</label>
+            </div>
+          </div>
+          <div class="glass-card config-card">
+            <div class="config-label">难度设置</div>
+            <div class="diff-toggle" style="margin-top:.45rem;">
+              <button class="diff-btn" onclick="setDiff('easy',this)">简单</button>
+              <button class="diff-btn active-medium" onclick="setDiff('medium',this)">中等</button>
+              <button class="diff-btn" onclick="setDiff('hard',this)">困难</button>
+            </div>
+            <p style="font-size:.72rem;color:var(--text-dim);margin-top:.5rem;" id="diff-desc">平衡题型分布，适合期末综合复习</p>
+          </div>
+          <div class="glass-card config-card">
+            <div class="config-label">预计总分</div>
+            <div class="score-display" id="score-display">100<span style="font-size:.9rem;-webkit-text-fill-color:var(--text-dim)"> 分</span></div>
+            <p class="score-note" id="score-note">4种题型 · 满分配置</p>
+          </div>
+        </div>
+
+        <div class="generate-wrap">
+          <button class="btn-generate" id="btn-gen" onclick="generateExam()">
+            <div class="spinner-ring"></div>
+            <span class="btn-icon">⚡</span>
+            <span id="btn-text">生成模拟卷</span>
+          </button>
+        </div>
+
+        <div id="exam-result"></div>
+
+        <!-- 判分区块 -->
+        <div class="grade-zone">
+          <div class="grade-zone-title">📷 上传做完的试卷判分</div>
+          <input type="file" id="grade-photo-input" accept="image/*" style="display:none" onchange="onGradePhotoSelected(this)"/>
+          <button class="grade-upload-btn" id="grade-upload-btn" onclick="document.getElementById('grade-photo-input').click()">
+            📷 选择 / 拍摄做完的试卷
+          </button>
+          <p class="grade-hint">支持手机拍照直传 · 确保试卷编号清晰可见 · AI 自动识别并判分</p>
+          <div class="grade-loading" id="grade-loading">
+            <div class="grade-spinner"></div>
+            <div class="grade-loading-text" id="grade-loading-text">AI 正在识别并判分…通常 20-40 秒，请稍候</div>
+          </div>
+          <div class="grade-error" id="grade-error"></div>
+          <div class="grade-result-card" id="grade-result-card"></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+const esc = escHtmlGlobal;
+
+/* Tab 切换 */
+function switchTab(t) {
+  const qa=document.getElementById('tab-qa'), exam=document.getElementById('tab-exam');
+  const qaBtn=document.getElementById('tab-qa-btn'), examBtn=document.getElementById('tab-exam-btn');
+  if(t==='qa'){
+    qa.style.display='flex'; exam.style.display='none';
+    qaBtn.classList.add('active'); examBtn.classList.remove('active');
+    setTimeout(()=>{ const a=document.getElementById('chat-area'); a.scrollTop=a.scrollHeight; },50);
+  } else {
+    qa.style.display='none'; exam.style.display='flex';
+    qaBtn.classList.remove('active'); examBtn.classList.add('active');
+    loadKpChips();
+  }
+}
+
+/* 知识点上下文 from URL */
+let currentTopic = null;
+let sessionId    = null;
+let pendingPhoto = null;  // File
+const SESS_KEY = 'kr_teacher_session';
+
+function saveSession(){ if (sessionId) localStorage.setItem(SESS_KEY, String(sessionId)); }
+
+/* 把后端历史渲染回聊天区(刷新后恢复) */
+function renderHistory(history){
+  let lastTeacher = null;   // 把连续的 老师reply+ask_back 合并视觉上更顺
+  for (const h of history){
+    if (h.role === 'child'){
+      addStudentMsg(h.content || '');
+      lastTeacher = null;
+    } else {
+      addTeacherMsg(esc(h.content || '').replace(/\n/g,'<br>'));
+    }
+  }
+  scrollChat();
+}
+
+/* 启动:先恢复已存会话,再处理 URL 带来的知识点 */
+(async function init(){
+  const params = new URLSearchParams(window.location.search);
+  const topic  = params.get('topic');
+
+  const saved = localStorage.getItem(SESS_KEY);
+  if (saved){
+    sessionId = parseInt(saved, 10);
+    try {
+      const data = await api('/chat/history?session_id=' + sessionId);
+      if (data && data.history && data.history.length){
+        renderHistory(data.history);
+        if (data.topic && data.topic !== '通用辅导') currentTopic = data.topic;
+      } else {
+        sessionId = null; localStorage.removeItem(SESS_KEY);  // 空会话,丢弃
+      }
+    } catch(e){ /* 拉不到就当新会话 */ sessionId = null; }
+  }
+
+  if (topic){
+    currentTopic = topic;
+    const bar = document.getElementById('ctx-bar');
+    document.getElementById('ctx-tag-label').textContent = topic;
+    bar.classList.remove('hidden');
+    setTimeout(() => addTeacherMsg(`我看到你从知识图谱带来了 <strong style="color:var(--purple)">${esc(topic)}</strong> 这个知识点，我们来专项讲解一下！`), 300);
+  } else if (currentTopic){
+    // 从已存会话恢复出来的知识点,也把上下文条显示出来
+    const bar = document.getElementById('ctx-bar');
+    document.getElementById('ctx-tag-label').textContent = currentTopic;
+    bar.classList.remove('hidden');
+  }
+})();
+
+function clearCtx() {
+  currentTopic = null;
+  document.getElementById('ctx-bar').classList.add('hidden');
+}
+
+/* 开启全新对话:清空当前会话与界面 */
+function newChat(){
+  if (!confirm('开启新对话？当前这段对话会保留在服务器，但界面会清空重新开始。')) return;
+  sessionId = null;
+  currentTopic = null;
+  localStorage.removeItem(SESS_KEY);
+  document.getElementById('ctx-bar').classList.add('hidden');
+  // 清空聊天区,只留初始欢迎语
+  const area = document.getElementById('chat-area');
+  area.querySelectorAll('.msg-row').forEach((el,i)=>{ if(i>0) el.remove(); });
+}
+
+/* 聊天工具 */
+function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
+function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();} }
+function fillInput(text){ const el=document.getElementById('chat-input'); el.value=text; el.focus(); autoResize(el); }
+function scrollChat(){ const a=document.getElementById('chat-area'); a.scrollTop=a.scrollHeight; }
+
+function addStudentMsg(text, imgFile) {
+  const area=document.getElementById('chat-area');
+  const now=new Date(), ts=`${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const row=document.createElement('div');
+  row.className='msg-row student';
+  let imgHtml='';
+  if (imgFile) {
+    const url=URL.createObjectURL(imgFile);
+    imgHtml=`<img class="img-preview" src="${url}" alt="题目图片"/>`;
+  }
+  row.innerHTML=`<div class="avatar stu-av">学</div><div class="msg-bd">
+    <div class="bubble s-bub">${esc(text)}${imgHtml}</div>
+    <div class="bubble-meta" style="justify-content:flex-end;">· ${ts}</div></div>`;
+  area.appendChild(row); scrollChat();
+}
+
+function addTeacherMsg(html) {
+  const area=document.getElementById('chat-area');
+  const now=new Date(), ts=`${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const row=document.createElement('div');
+  row.className='msg-row teacher';
+  row.innerHTML=`<div class="avatar ai-av">AI</div><div class="msg-bd">
+    <div class="bubble t-bub">${html}</div>
+    <div class="bubble-meta">AI 老师 · ${ts}</div></div>`;
+  document.getElementById('chat-area').appendChild(row); scrollChat();
+  return row;
+}
+
+function addThinking() {
+  const area=document.getElementById('chat-area');
+  const row=document.createElement('div');
+  row.className='msg-row teacher'; row.id='thinking-row';
+  row.innerHTML=`<div class="avatar ai-av">AI</div><div class="thinking-bubble"><div class="think-dot"></div><div class="think-dot"></div><div class="think-dot"></div></div>`;
+  area.appendChild(row); scrollChat();
+  return row;
+}
+
+/* 发送消息 */
+async function sendMsg() {
+  const el   = document.getElementById('chat-input');
+  const text = el.value.trim();
+  if (!text && !pendingPhoto) return;
+
+  const sendBtn = document.getElementById('send-btn');
+  sendBtn.disabled = true;
+
+  const photo = pendingPhoto;
+  pendingPhoto = null;
+  clearPhotoPreview();
+
+  addStudentMsg(text || '（图片）', photo);
+  el.value=''; el.style.height='auto';
+
+  const thinkRow = addThinking();
+
+  try {
+    const fd = new FormData();
+    fd.append('message', text || '请看图回答');
+    if (sessionId) fd.append('session_id', sessionId);
+    if (currentTopic) fd.append('topic', currentTopic);
+    if (photo) fd.append('image', photo);
+
+    const data = await apiForm('/chat', fd);
+    sessionId = data.session_id || sessionId;
+    saveSession();
+
+    thinkRow.remove();
+    let replyHtml = esc(data.reply || '').replace(/\n/g, '<br>');
+    if (data.mastered) replyHtml += '<br><span class="tag tag-cyan">✓ 知识点掌握度已更新</span>';
+    if (data.ask_back) replyHtml += `<br><br><em style="color:var(--purple)">${esc(data.ask_back)}</em>`;
+    addTeacherMsg(replyHtml);
+  } catch (e) {
+    thinkRow.remove();
+    addTeacherMsg(`<span style="color:var(--magenta)">⚠ 请求失败：${esc(e.message)}</span>`);
+  } finally {
+    sendBtn.disabled = false;
+  }
+}
+
+/* 拍照 */
+function onPhotoSelected(input) {
+  if (!input.files || !input.files.length) return;
+  pendingPhoto = input.files[0];
+  const bar = document.getElementById('photo-preview-bar');
+  const url = URL.createObjectURL(pendingPhoto);
+  bar.style.display = '';
+  bar.innerHTML = `<div style="display:flex;align-items:center;gap:8px;">
+    <img src="${url}" style="height:40px;border-radius:6px;border:1px solid rgba(45,226,230,.3);" alt="预览"/>
+    <span style="font-size:.75rem;color:var(--text-dim);">${esc(pendingPhoto.name)}</span>
+    <button onclick="clearPhotoPreview()" style="background:none;border:none;color:var(--magenta);cursor:pointer;font-size:.8rem;">✕</button>
+  </div>`;
+  input.value = '';
+}
+function clearPhotoPreview() {
+  pendingPhoto = null;
+  const bar = document.getElementById('photo-preview-bar');
+  bar.style.display = 'none'; bar.innerHTML = '';
+}
+
+/* 出卷 */
+let selectedDiff = 'medium';
+let kpData = null;  // 知识点数据缓存
+
+async function loadKpChips() {
+  if (kpData) { renderKpChips(); return; }
+  try {
+    const [knowledge, weak] = await Promise.allSettled([
+      api('/knowledge'), api('/weak'),
+    ]);
+    kpData = {
+      kps:  knowledge.status==='fulfilled' ? (knowledge.value.knowledge_points||[]) : [],
+      weak: weak.status==='fulfilled' ? (weak.value||[]) : [],
+    };
+    renderKpChips();
+  } catch (e) { /* 静默 */ }
+}
+
+function renderKpChips() {
+  if (!kpData) return;
+
+  // Panel A: 知识图谱考点
+  const chipsA = document.getElementById('kp-chips-a');
+  if (kpData.kps.length) {
+    chipsA.innerHTML = kpData.kps.slice(0,12).map(kp => {
+      const pct = Math.round((kp.mastery||0)*100);
+      const mcls = pct>=76?'m-high':pct>=60?'m-mid':'m-low';
+      return `<label class="chip-item chip-item-cyan" onclick="toggleChip(this)">
+        <input type="checkbox" value="${esc(kp.name)}">${esc(kp.name)}<span class="mastery-badge ${mcls}">(${pct}%)</span>
+      </label>`;
+    }).join('');
+  } else {
+    chipsA.innerHTML = '<div style="color:var(--text-dim);font-size:.78rem;">暂无知识点数据</div>';
+  }
+
+  // Panel B: 薄弱点
+  const chipsB = document.getElementById('kp-chips-b');
+  if (kpData.weak.length) {
+    chipsB.innerHTML = kpData.weak.slice(0,8).map(wp => {
+      return `<label class="chip-item chip-item-magenta selected" onclick="toggleChip(this)">
+        <input type="checkbox" value="${esc(wp.knowledge_point)}" checked>${esc(wp.knowledge_point)}<span class="mastery-badge">(${esc(wp.subject||'')})</span>
+      </label>`;
+    }).join('');
+  } else {
+    chipsB.innerHTML = '<div style="color:var(--text-dim);font-size:.78rem;">暂无错题数据</div>';
+  }
+}
+
+function switchPanel(id, isManual) {
+  document.getElementById('auto-'+id).classList.toggle('hidden', isManual);
+  document.getElementById('manual-'+id).classList.toggle('hidden', !isManual);
+}
+function switchPanelC(isOn) {
+  document.getElementById('panel-c-on').classList.toggle('hidden', !isOn);
+  document.getElementById('panel-c-off').classList.toggle('hidden', isOn);
+  document.getElementById('lbl-on-c').style.color = isOn ? 'var(--purple)' : 'var(--text-dim)';
+}
+function toggleChip(label) {
+  const cb = label.querySelector('input[type="checkbox"]');
+  setTimeout(() => { label.classList.toggle('selected', cb.checked); }, 0);
+}
+const diffMap = { easy:'以基础题为主，适合知识巩固练习', medium:'平衡题型分布，适合期末综合复习', hard:'以提高题为主，适合竞赛冲刺训练' };
+function setDiff(level, btn) {
+  selectedDiff = level;
+  document.querySelectorAll('.diff-btn').forEach(b => b.className='diff-btn');
+  btn.classList.add('active-'+level);
+  document.getElementById('diff-desc').textContent = diffMap[level];
+}
+function updateScore() {
+  const n = Array.from(document.querySelectorAll('.type-options input[type="checkbox"]')).filter(c=>c.checked).length;
+  const scores=[0,60,80,90,100], notes=['','1种题型','2种题型','3种题型','4种题型 · 满分配置'];
+  document.getElementById('score-display').innerHTML = scores[n]+'<span style="font-size:.9rem;-webkit-text-fill-color:var(--text-dim)"> 分</span>';
+  document.getElementById('score-note').textContent = notes[n];
+}
+
+async function generateExam() {
+  const btn = document.getElementById('btn-gen'), txt = document.getElementById('btn-text');
+  btn.classList.add('loading'); txt.textContent = '生成中…';
+
+  // 收集配置
+  const num = parseInt(document.getElementById('qty-range').value);
+  const TYPE_CN = {choice:'选择题', fill:'填空题', calc:'计算题', essay:'解答题'};
+  const types = Array.from(document.querySelectorAll('.type-options input[type="checkbox"]'))
+    .filter(c=>c.checked).map(c=>TYPE_CN[c.value]||c.value).join('、');  // 后端要 string,不能传数组
+  const scores = Array.from(document.querySelectorAll('.type-options input[type="checkbox"]'))
+    .filter(c=>c.checked).length;
+  const total = [0,60,80,90,100][scores] || 100;
+
+  // 手动选择的考点
+  const manualA = document.getElementById('toggle-a').checked;
+  const manualB = document.getElementById('toggle-b').checked;
+  const focusPoints  = manualA ? Array.from(document.querySelectorAll('#kp-chips-a .selected input')).map(i=>i.value) : null;
+  const weakPoints   = manualB ? Array.from(document.querySelectorAll('#kp-chips-b .selected input')).map(i=>i.value) : null;
+  const useAI        = document.getElementById('toggle-c').checked;
+
+  const isRefresh = btn.dataset.refresh === 'true';
+  const body = {
+    num, types, difficulty: selectedDiff, total,
+    focus_points:  focusPoints,
+    weak_points:   weakPoints,
+    auto_points:   (!manualA && !manualB && !useAI) ? null : undefined,
+    refresh:       isRefresh,
+  };
+
+  try {
+    const data = await api('/exam/generate', { method:'POST', body:JSON.stringify(body) });
+    btn.classList.remove('loading');
+    txt.textContent = '重新生成（AI 强制出新题）';
+    btn.dataset.refresh = 'true';
+    renderExam(data);
+  } catch (e) {
+    btn.classList.remove('loading');
+    txt.textContent = isRefresh ? '重新生成（AI 强制出新题）' : '生成失败，重试';
+    document.getElementById('exam-result').innerHTML = `<div style="color:var(--magenta);text-align:center;padding:20px;">⚠ 生成失败：${esc(e.message)}</div>`;
+    document.getElementById('exam-result').classList.add('revealed');
+  }
+}
+
+function renderExam(data) {
+  const el = document.getElementById('exam-result');
+
+  const sectColor = ['#2563eb','#7c3aed','#059669','#dc2626'];
+  const sectClass = ['s1','s2','s3','s4'];
+  let sectHtml = '';
+  (data.sections||[]).forEach((sec, si) => {
+    const color = sectColor[si % sectColor.length];
+    sectHtml += `<div class="exam-section ${sectClass[si%4]}">
+      <div class="esec-title" style="border-color:${color}">${esc(sec.name||'')}</div>`;
+    (sec.questions||[]).forEach(q => {
+      let inner = '';
+      if (q.options && q.options.length) {
+        inner += `<div class="q-options">${q.options.map(o=>`<span>${esc(o)}</span>`).join('')}</div>`;
+      } else if ((q.type||'').includes('fill') || (q.stem||'').includes('____')) {
+        inner = '';  // 空白题干中已有填空线
+      } else {
+        inner = `<div class="calc-space">答题区……</div>`;
+      }
+      sectHtml += `<div class="question-item">
+        <p><span class="question-num">${q.number||''}.</span> ${esc(q.stem||'')} ${q.score!=null?`<span style="color:#94a3b8;font-size:.78rem;">(${q.score}分)</span>`:''}</p>
+        ${inner}
+      </div>`;
+    });
+    sectHtml += `</div>`;
+  });
+
+  // 答案区
+  let ansHtml = '<div class="ans-row"><strong style="color:var(--cyan)">参考答案：</strong></div>';
+  (data.sections||[]).forEach(sec => {
+    (sec.questions||[]).forEach(q => {
+      if (q.answer) ansHtml += `<div class="ans-row">${q.number||''}. ${esc(q.answer)}</div>`;
+    });
+  });
+
+  const sourceBadge = data.from_bank != null
+    ? (data.from_bank
+        ? `<span class="source-badge source-badge-bank">⚡ 题库秒出</span>`
+        : `<span class="source-badge source-badge-ai">🤖 AI 命题</span>`)
+    : '';
+  const codeHtml = data.code
+    ? `<div style="margin-top:.6rem;"><span class="exam-code-badge">试卷编号：${esc(data.code)}</span>${sourceBadge}</div>`
+    : '';
+
+  el.innerHTML = `
+    <div class="result-label"><span>▼ 模拟卷已生成 · ${data.from_bank ? '⚡ 题库秒出' : 'AI 命题完成'}</span></div>
+    <div class="exam-paper exam-printable">
+      <div class="exam-title">
+        <h2>${esc(data.title||'模拟卷')}</h2>
+        ${codeHtml}
+        <div class="exam-meta" style="margin-top:.7rem;">
+          <span>📅 日期：<u>__________</u></span>
+          <span>👤 姓名：<u>__________</u></span>
+          <span>📊 总分：<strong>${data.total_score!=null?data.total_score:100}分</strong></span>
+          <span>⏱ 限时：<strong>${data.duration_min||90}分钟</strong></span>
+        </div>
+      </div>
+      ${sectHtml}
+      <div class="exam-actions">
+        <button class="show-ans-btn" onclick="toggleAnswers()">👁 显示 / 隐藏答案</button>
+        <button class="exam-btn exam-btn-pdf" onclick="alert('PDF下载功能开发中')">📥 下载 PDF</button>
+        <button class="exam-btn exam-btn-print" onclick="window.print()">🖨️ 打印试卷</button>
+      </div>
+      <div class="answers-block" id="answers-block">${ansHtml}</div>
+    </div>`;
+
+  el.classList.add('revealed');
+  el.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function toggleAnswers() {
+  document.getElementById('answers-block').classList.toggle('visible');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const a=document.getElementById('chat-area'); a.scrollTop=a.scrollHeight;
+});
+
+/* ── 试卷判分 ──────────────────────────────────────────── */
+
+/**
+ * canvas 压缩：长边限制到 maxLong px，返回 Blob (image/jpeg)
+ */
+function compressImageForGrade(file, maxLong = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const long = Math.max(w, h);
+      if (long > maxLong) {
+        const ratio = maxLong / long;
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob);
+        else reject(new Error('canvas toBlob 失败'));
+      }, 'image/jpeg', 0.88);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图片加载失败')); };
+    img.src = url;
+  });
+}
+
+async function onGradePhotoSelected(input) {
+  if (!input.files || !input.files.length) return;
+  const file = input.files[0];
+  input.value = '';
+
+  const uploadBtn  = document.getElementById('grade-upload-btn');
+  const loadingEl  = document.getElementById('grade-loading');
+  const loadingTxt = document.getElementById('grade-loading-text');
+  const errorEl    = document.getElementById('grade-error');
+  const resultCard = document.getElementById('grade-result-card');
+
+  // 重置状态
+  errorEl.classList.remove('visible'); errorEl.textContent = '';
+  resultCard.classList.remove('visible'); resultCard.innerHTML = '';
+  uploadBtn.disabled = true;
+  loadingEl.classList.add('active');
+  loadingTxt.textContent = 'AI 正在识别并判分…通常 20-40 秒，请稍候';
+
+  // 进度提示轮换
+  const hints = [
+    'AI 正在识别并判分…通常 20-40 秒，请稍候',
+    '正在解析手写内容，请耐心等待…',
+    '快好了，AI 正在核对答案…',
+  ];
+  let hi = 0;
+  const hintTimer = setInterval(() => {
+    hi = (hi + 1) % hints.length;
+    loadingTxt.textContent = hints[hi];
+  }, 9000);
+
+  try {
+    // 压缩图片
+    const compressed = await compressImageForGrade(file, 1600);
+    const fd = new FormData();
+    fd.append('image', compressed, 'exam.jpg');
+
+    const data = await apiForm('/exam/grade', fd);
+    clearInterval(hintTimer);
+    loadingEl.classList.remove('active');
+    uploadBtn.disabled = false;
+    renderGradeResult(data, resultCard);
+  } catch(e) {
+    clearInterval(hintTimer);
+    loadingEl.classList.remove('active');
+    uploadBtn.disabled = false;
+    errorEl.textContent = '⚠ 判分失败：' + e.message;
+    errorEl.classList.add('visible');
+  }
+}
+
+/* ── 语音输入 ─────────────────────────────────────────────────────── */
+(function() {
+  let mediaRecorder = null;
+  let audioChunks   = [];
+  let recStream     = null;
+  let isRecording   = false;
+
+  window.toggleVoice = async function() {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  };
+
+  async function startRecording() {
+    const btn = document.getElementById('mic-btn');
+
+    // 检查浏览器支持
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('当前浏览器不支持语音输入，请使用 Chrome 或 Safari 最新版。');
+      return;
+    }
+    if (typeof MediaRecorder === 'undefined') {
+      alert('当前浏览器不支持 MediaRecorder，请升级浏览器后重试。');
+      return;
+    }
+
+    try {
+      recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('麦克风权限被拒绝，请在浏览器/系统设置中允许麦克风访问后重试。');
+      } else {
+        alert('无法启动麦克风：' + err.message);
+      }
+      return;
+    }
+
+    // 选音频格式：优先 webm，iOS Safari 可能只支持 mp4
+    let mimeType = '';
+    const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+    for (const m of preferred) {
+      if (MediaRecorder.isTypeSupported(m)) { mimeType = m; break; }
+    }
+
+    try {
+      mediaRecorder = mimeType ? new MediaRecorder(recStream, { mimeType }) : new MediaRecorder(recStream);
+    } catch(e) {
+      mediaRecorder = new MediaRecorder(recStream);
+    }
+
+    audioChunks = [];
+    mediaRecorder.addEventListener('dataavailable', e => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    });
+    mediaRecorder.addEventListener('stop', () => handleRecordingStopped());
+    mediaRecorder.start(200); // 每 200ms 触发一次 dataavailable
+    isRecording = true;
+
+    // 按钮进入录音态
+    btn.classList.add('recording');
+    btn.title = '录音中，再点结束';
+    btn.textContent = '⏹';
+  }
+
+  function stopRecording() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    mediaRecorder.stop();
+    // 释放麦克风
+    if (recStream) { recStream.getTracks().forEach(t => t.stop()); recStream = null; }
+    isRecording = false;
+
+    const btn = document.getElementById('mic-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    btn.title = '识别中…';
+  }
+
+  // 带超时 + 自动重试的语音上传：弱网瞬断时重发（后端本来就能成功）
+  async function postAsr(blob, ext) {
+    let lastErr;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const fd = new FormData();                 // 每次重建：body 不能复用
+      fd.append('audio', blob, 'voice.' + ext);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 45000);
+      try {
+        const res = await fetch('/api/asr', { method: 'POST', body: fd, signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('服务返回 ' + res.status);
+        return await res.json();
+      } catch (e) {
+        clearTimeout(timer);
+        lastErr = e;
+        if (attempt < 3) {                       // 还能重试 → 等一下再发
+          const btn = document.getElementById('mic-btn');
+          if (btn) btn.title = `网络不稳，重试中(${attempt}/2)…`;
+          await new Promise(r => setTimeout(r, 700 * attempt));
+        }
+      }
+    }
+    throw lastErr;
+  }
+
+  async function handleRecordingStopped() {
+    const btn = document.getElementById('mic-btn');
+    const actualMime = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
+    const ext = actualMime.includes('mp4') ? 'mp4' : actualMime.includes('ogg') ? 'ogg' : 'webm';
+    const blob = new Blob(audioChunks, { type: actualMime });
+    audioChunks = [];
+
+    // 录音太短/没采到音频，别白跑一趟网络
+    if (!blob || blob.size < 1200) {
+      addTeacherMsg('<span style="color:var(--text-dim)">⚠ 没录到声音，请按住说完整一句话再松开。</span>');
+      btn.disabled = false; btn.classList.remove('recording');
+      btn.textContent = '🎤'; btn.title = '语音输入';
+      return;
+    }
+
+    try {
+      const data = await postAsr(blob, ext);
+      const text = (data && data.text) ? data.text.trim() : '';
+      if (text) {
+        fillInput(text);
+      } else {
+        addTeacherMsg('<span style="color:var(--text-dim)">⚠ 未能识别到语音内容，请重试或手动输入。</span>');
+      }
+    } catch(e) {
+      const nice = /Failed to fetch|abort|NetworkError/i.test(e.message)
+        ? '网络不稳定，识别没发成功，请重试一次' : e.message;
+      addTeacherMsg(`<span style="color:var(--magenta)">⚠ 语音识别失败：${esc(nice)}</span>`);
+    } finally {
+      btn.disabled  = false;
+      btn.classList.remove('recording');
+      btn.textContent = '🎤';
+      btn.title = '语音输入';
+    }
+  }
+})();
+
+function renderGradeResult(data, container) {
+  if (!data.matched) {
+    container.innerHTML = `
+      <div class="grade-not-matched">
+        ⚠ ${esc(data.message || '未能识别到卷子编号，请确保编号清晰可见后重新拍照上传。')}
+      </div>`;
+    container.classList.add('visible');
+    return;
+  }
+
+  const details = data.details || [];
+  const correctCount = details.filter(d => d.is_correct).length;
+  const wrongCount   = details.filter(d => !d.is_correct).length;
+
+  const detailHtml = details.map(d => {
+    const icon = d.is_correct ? '✓' : '✗';
+    const cls  = d.is_correct ? 'correct-item' : 'wrong-item';
+    const childAns = esc(d.child_answer != null ? String(d.child_answer) : '—');
+    const correctAns = esc(d.correct_answer != null ? String(d.correct_answer) : '');
+    const wrongExtra = !d.is_correct && correctAns
+      ? `<span class="gdi-correct-ans">正确：${correctAns}</span>` : '';
+    const scoreHtml = d.score != null ? `<span style="color:var(--text-dim);font-size:.75rem;">${d.score}分</span>` : '';
+    return `<div class="grade-detail-item ${cls}">
+      <span class="gdi-icon" style="color:${d.is_correct?'#4ade80':'var(--magenta)'};">${icon}</span>
+      <span class="gdi-num">第${d.number}题</span>
+      <span class="gdi-ans${d.is_correct?'':' gdi-ans-wrong'}">作答：${childAns}</span>
+      ${wrongExtra}
+      ${scoreHtml}
+    </div>`;
+  }).join('');
+
+  const titleHtml = data.title ? `<div class="grade-meta">卷名：${esc(data.title)}&nbsp;&nbsp;|&nbsp;&nbsp;识别编号：<code style="color:var(--cyan);font-size:.82rem;">${esc(data.code||'')}</code></div>` : '';
+
+  container.innerHTML = `
+    <div class="grade-score-row">
+      <span class="grade-score-big">${data.score != null ? data.score : '—'}</span>
+      <span class="grade-score-total">/ ${data.total != null ? data.total : '—'} 分</span>
+    </div>
+    <div class="grade-stat-row">
+      <span class="grade-correct">✓ 答对 ${correctCount} 题</span>
+      <span class="grade-wrong">✗ 答错 ${wrongCount} 题</span>
+    </div>
+    ${titleHtml}
+    <div class="grade-detail-list">${detailHtml || '<div style="color:var(--text-dim);font-size:.8rem;">暂无逐题详情</div>'}</div>
+    ${wrongCount > 0 ? '<div class="grade-footer-note">❌ 错题已自动收集到错题本，可在<strong>自我练习</strong>里专项练习，逐一攻克薄弱知识点。</div>' : ''}`;
+  container.classList.add('visible');
+}
+</script>
+<script src="bg.js"></script>
+</body>
+</html>
