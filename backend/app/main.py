@@ -21,28 +21,27 @@ app.add_middleware(
 )
 
 # ===== 访问保护：HTTP Basic Auth（公网暴露时保护孩子数据）=====
-# 沿用原 Caddy 方案的用户名 'review'，密码走环境变量 BASIC_AUTH_PASS。
-# 未设密码时不拦截（本地开发用）。健康检查 /api/health 放行（探活用）。
-import os as _authos
+# 沿用原 Caddy 方案的用户名 'review'。用户名/密码来自配置(get_settings 读 .env)，
+# 这样任何启动方式都生效。密码为空则不拦截(本地开发)。/api/health 放行(探活)。
 import base64 as _b64
 import secrets as _secrets
 from starlette.middleware.base import BaseHTTPMiddleware as _BaseHTTPMiddleware
 from starlette.responses import Response as _Response
 
-_AUTH_USER = _authos.environ.get("BASIC_AUTH_USER", "review")
-_AUTH_PASS = _authos.environ.get("BASIC_AUTH_PASS", "")
-
 
 class _BasicAuthMiddleware(_BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if not _AUTH_PASS or request.url.path == "/api/health":
+        s = get_settings()
+        auth_pass = s.basic_auth_pass
+        if not auth_pass or request.url.path == "/api/health":
             return await call_next(request)
+        auth_user = s.basic_auth_user or "review"
         ok = False
         h = request.headers.get("Authorization", "")
         if h.startswith("Basic "):
             try:
                 u, _, p = _b64.b64decode(h[6:]).decode("utf-8").partition(":")
-                ok = _secrets.compare_digest(u, _AUTH_USER) and _secrets.compare_digest(p, _AUTH_PASS)
+                ok = _secrets.compare_digest(u, auth_user) and _secrets.compare_digest(p, auth_pass)
             except Exception:
                 ok = False
         if not ok:

@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # 运行模式
     llm_dry_run: bool = True
 
+    # 访问保护（公网暴露时用 HTTP Basic Auth；密码为空则不拦截，本地开发用）
+    basic_auth_user: str = "review"
+    basic_auth_pass: str = ""
+
     # Providers（OpenAI 兼容）
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
