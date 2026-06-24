@@ -20,6 +20,42 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
+# ===== 访问保护：HTTP Basic Auth（公网暴露时保护孩子数据）=====
+# 沿用原 Caddy 方案的用户名 'review'，密码走环境变量 BASIC_AUTH_PASS。
+# 未设密码时不拦截（本地开发用）。健康检查 /api/health 放行（探活用）。
+import os as _authos
+import base64 as _b64
+import secrets as _secrets
+from starlette.middleware.base import BaseHTTPMiddleware as _BaseHTTPMiddleware
+from starlette.responses import Response as _Response
+
+_AUTH_USER = _authos.environ.get("BASIC_AUTH_USER", "review")
+_AUTH_PASS = _authos.environ.get("BASIC_AUTH_PASS", "")
+
+
+class _BasicAuthMiddleware(_BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if not _AUTH_PASS or request.url.path == "/api/health":
+            return await call_next(request)
+        ok = False
+        h = request.headers.get("Authorization", "")
+        if h.startswith("Basic "):
+            try:
+                u, _, p = _b64.b64decode(h[6:]).decode("utf-8").partition(":")
+                ok = _secrets.compare_digest(u, _AUTH_USER) and _secrets.compare_digest(p, _AUTH_PASS)
+            except Exception:
+                ok = False
+        if not ok:
+            return _Response(
+                "需要登录", status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="kids-review"'},
+            )
+        return await call_next(request)
+
+
+# add_middleware 后加的在最外层、最先执行 —— 认证先于一切
+app.add_middleware(_BasicAuthMiddleware)
+
 app.include_router(api_router)
 
 
