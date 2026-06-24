@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     bailian_api_key: str = ""
     bailian_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    # 火山方舟 ARK（国内，OpenAI 兼容）—— 复习站搬国内后主用，走 MiniMax M3 等
+    volcengine_api_key: str = ""
+    volcengine_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
 
     # 是否给请求带 response_format=json_object（OpenRouter 多模型兼容性不一，默认关，靠 _extract_json 兜底）
     use_json_response_format: bool = False
@@ -69,6 +72,8 @@ class Settings(BaseSettings):
             return self.deepseek_api_key, self.deepseek_base_url
         if provider == "bailian":
             return self.bailian_api_key, self.bailian_base_url
+        if provider in ("volcengine", "ark"):
+            return self.volcengine_api_key, self.volcengine_base_url
         raise ValueError(f"未知 provider: {provider}")
 
 
