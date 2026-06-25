@@ -179,7 +179,7 @@ def tutor_check(sid: int, req: TutorCheckReq):
 @router.post("/asr")
 async def asr_route(audio: UploadFile = File(...)):
     raw = await audio.read()
-    return asr.transcribe(raw, audio.content_type, audio.filename)
+    return await asr.transcribe(raw, audio.content_type, audio.filename)
 
 
 # ---------- AI 老师·通用问答 chat ----------
