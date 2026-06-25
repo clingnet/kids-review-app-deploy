@@ -35,9 +35,18 @@ def _save(raw: bytes, content_type: str | None, filename: str | None) -> tuple[s
     return str(path), ext
 
 
+def _ffmpeg_bin() -> str:
+    """优先用 pip 包 imageio-ffmpeg 自带的静态 ffmpeg（无需 sudo 装系统包），回退到 PATH 里的 ffmpeg。"""
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
+
 def _to_wav16k(path: str) -> bytes:
     """用 ffmpeg 把任意音频转成 16k 单声道 16bit WAV 字节。"""
-    cmd = ["ffmpeg", "-v", "quiet", "-y", "-i", path,
+    cmd = [_ffmpeg_bin(), "-v", "quiet", "-y", "-i", path,
            "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", "-f", "wav", "-"]
     try:
         r = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
